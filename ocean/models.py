@@ -89,4 +89,4 @@ class Alert(TimedModel):
         if Alert.REDIS_SHA_UPDATE_ALERT == None:
             script = settings.REDIS_LUA_UPDATE_ALERT % {'REDIS_KEY': settings.REDIS_KEY_ALERT}
             Alert.REDIS_SHA_UPDATE_ALERT = redis.script_load(script)
-        redis.evalsha(0, self.pk, self.category, self.name, self.note, self.level, self.status)
+        redis.evalsha(1, settings.REDIS_KEY_ALERT, self.pk, self.category, self.name, self.note, self.level, self.status)

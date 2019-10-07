@@ -14,4 +14,10 @@ class TagAdmin(admin.ModelAdmin):
 
 @admin.register(Alert)
 class AlertAdmin(admin.ModelAdmin):
-    pass
+    list_display = ['category', 'name', 'level', 'status', 'created_at']
+    readonly_fields = 'created_at', 'updated_at'
+    date_hierarchy = 'created_at'
+    list_filter = ['category', 'level', 'status']
+    search_fields = ['name', ]
+
+    
