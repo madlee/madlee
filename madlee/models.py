@@ -9,7 +9,6 @@ from .fields import JSONField
 from .misc import load_pickle, dump_pickle
 from .misc import join_path, is_file, ensure_dirs
 from .misc import DateTime
-from .const import KEY_REGIA_CACHE
 
 
 
@@ -67,7 +66,7 @@ class Alert(TimedModel):
     level       = models.CharField(max_length=1, choices=LEVEL_CHOICES)
     status      = models.CharField(max_length=1, choices=STATUS_CHOICES)
     comment     = models.TextField(blank=True, default='')
-    closed_by   = models.ForeignKey(User, null=True, blank=True, default=None)
+    closed_by   = models.ForeignKey(User, null=True, blank=True, default=None, on_delete=models.PROTECT)
 
     @property
     def key(self):
