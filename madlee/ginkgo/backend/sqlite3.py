@@ -21,11 +21,12 @@ CREATE TABLE IF NOT EXISTS ginkgo_blocks (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ginkgo_index 
-ON ginkgo_blocks (leaf, slot)
-'''
+ON ginkgo_blocks (leaf, slot);
 
-SQL_LOAD_ALL_LEAVES = '''SELECT name, id, slot, size
-FROM ginkgo_leaf
+
+SELECT name, id, slot, size
+FROM ginkgo_leaf;
+
 '''
 
 SQL_ADD_LEAF = '''INSERT INTO ginkgo_leaf
@@ -38,7 +39,7 @@ WHERE leaf = ? AND ? <= slot AND slot <= ?
 '''
 
 SQL_SAVE_BLOCKS = '''INSERT INTO ginkgo_blocks
-(leaf, slot, size, start, finish, data) VALUES (?, ?, ?, ?, ?)
+(leaf, slot, size, start, finish, data) VALUES (?, ?, ?, ?, ?, ?)
 '''
 
 SQL_SELECT_1ST_SLOT = '''SELECT MIN(slot) 
@@ -61,7 +62,7 @@ class SqliteBackend(BasicBackend):
         execute_sqls(SQL_PREPARE, cursor)
         leaves = list(cursor)
         self.__leaves = {
-            row[0]: row[2:] for row in leaves
+            row[0]: ((int(row[2]) if row[2] not in 'Ymd' else row[2]), row[3]) for row in leaves
         }
         self.__leaf_ids = {
             row[0]: row[1] for row in leaves
@@ -70,12 +71,13 @@ class SqliteBackend(BasicBackend):
 
     @property
     def all_leaves(self):
-        return {k: v[1:] for k, v in self.__leaves.items()}
+        return self.__leaves
 
     def add_leaf(self, key, slot, size):
         cursor = self.__db.cursor()
         cursor.execute(SQL_ADD_LEAF, (key, slot, size))
-        self.__leaves[key] = (cursor.lastrowid, slot, size)
+        self.__leaves[key] = (slot, size)
+        self.__leaf_ids[key] = cursor.lastrowid
         self.__db.commit()
 
 

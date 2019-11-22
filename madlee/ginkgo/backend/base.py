@@ -43,6 +43,7 @@ class BasicBackend(ABC):
                 start  = unpack('d', row[0:8])[0]
                 finish = unpack('d', row[-size:-size+8])[0]
                 slot   = to_slot(slot_type, ts=start)
+                print (key, slot, to_slot(slot_type, ts=finish))
                 assert slot == to_slot(slot_type, ts=finish)
                 result.append((slot, len(row)//size, start, finish, row))
         return result
@@ -62,14 +63,15 @@ class BasicBackend(ABC):
                 mid = (i+j)//2
                 record_mid = records[mid]
                 slot_mid = to_slot(slot_type, ts=unpack('d', record_mid[:8])[0])
-                if slot_mid > slot:
+                if slot < slot_mid:
                     j = mid
                 else:
-                    i = mid
+                    i = mid+1
             if i0 < i:
+                print (key, slot, i0, i)
                 blocks.append(b''.join(records[i0:i]))
 
         if blocks:
-            self.save_blocks(key, blocks)
+            self.save_blocks(key, *blocks)
         return blocks
 
