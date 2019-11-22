@@ -2,7 +2,7 @@ from sqlite3 import connect
 
 from ...misc.file import join_path
 from ...misc.db import execute_sqls
-from .base import BasicBackEnd
+from .base import BasicBackend
 
 
 SQL_PREPARE = '''CREATE TABLE IF NOT EXISTS ginkgo_leaf (
@@ -15,7 +15,7 @@ SQL_PREPARE = '''CREATE TABLE IF NOT EXISTS ginkgo_leaf (
 CREATE TABLE IF NOT EXISTS ginkgo_blocks (
     id INTEGER  PRIMARY KEY AUTOINCREMENT,
     leaf INTEGER REFERENCES ginkgo_leaf(id),
-    slot INTEGER,
+    slot INTEGER, size INTEGER, 
     start DOUBLE, finish DOUBLE,
     data BINARY
 );
@@ -38,10 +38,23 @@ WHERE leaf = ? AND ? <= slot AND slot <= ?
 '''
 
 SQL_SAVE_BLOCKS = '''INSERT INTO ginkgo_blocks
-(leaf, slot, start, finish, data) VALUES (?, ?, ?, ?, ?)
+(leaf, slot, size, start, finish, data) VALUES (?, ?, ?, ?, ?)
 '''
 
-class SqliteBackEnd(BasicBackEnd):
+SQL_SELECT_1ST_SLOT = '''SELECT MIN(slot) 
+FROM ginkgo_blocks
+WHERE leaf = ?
+'''
+
+SQL_SELECT_LAST_SLOT = '''SELECT MAX(slot) 
+FROM ginkgo_blocks
+WHERE leaf = ?
+'''
+
+
+class SqliteBackend(BasicBackend):
+    '''Save in Sqlite DB'''
+
     def __init__(self, name, readonly=True):
         self.__db = db = connect(name)
         cursor = db.cursor()
@@ -76,5 +89,27 @@ class SqliteBackEnd(BasicBackEnd):
     def save_blocks(self, key, *blocks):
         cursor = self.__db.cursor()
         leaf_id = self.__leaf_ids[key]
-        blocks = [(leaf_id, row[0], row[1], row[2], row[3]) for row in blocks]
-        cursor.executemany(SQL_SAVE_BLOCKS, )
+        blocks = self.prepare_blocks(key, blocks)
+        blocks = [(leaf_id, row[0], row[1], row[2], row[3], row[4]) for row in blocks]
+        cursor.executemany(SQL_SAVE_BLOCKS, blocks)
+
+
+    def get_last_slot(self, key):
+        '''Get last slot'''
+        cursor = self.__db.cursor()
+        leaf_id = self.__leaf_ids[key]
+        cursor.execute(SQL_SELECT_LAST_SLOT, (leaf_id, ))
+        return cursor.fetchone()[0]
+
+    
+    def get_1st_slot(self, key):
+        '''Get the 1st slot'''
+        cursor = self.__db.cursor()
+        leaf_id = self.__leaf_ids[key]
+        cursor.execute(SQL_SELECT_1ST_SLOT, (leaf_id, ))
+        return cursor.fetchone()[0]
+
+
+    def commit(self):
+        self.__db.commit()
+
