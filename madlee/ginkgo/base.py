@@ -1,9 +1,9 @@
 from abc import ABC
 from struct import pack, unpack
 
-from ...misc.time import DateTime, TimeDelta
-from ...misc.time import ONE_DAY, SECONDS_IN_AN_HOUR, SECONDS_IN_A_DAY
-from ...misc.lua import LUA_TS_TO_TIME, upload_scripts
+from ..misc.time import DateTime, TimeDelta
+from ..misc.time import ONE_DAY, SECONDS_IN_AN_HOUR, SECONDS_IN_A_DAY
+from ..misc.lua import LUA_TS_TO_TIME, upload_scripts
 from .backend import connect_backend
 
 

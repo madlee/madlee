@@ -8,7 +8,7 @@ except ImportError:
     pass
 
 
-def create_backend(name, mode='r', style=None):
-    return SqliteBackEnd(name, mode='r')
+def connect_backend(name, readonly=True, style=None):
+    return SqliteBackEnd(name, readonly)
 
 
