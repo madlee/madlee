@@ -1,4 +1,4 @@
-from abs import ABC, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod, abstractproperty
 
 
 class BasicBackEnd(ABC):
@@ -13,4 +13,8 @@ class BasicBackEnd(ABC):
     @abstractmethod
     def load_blocks(self, key, slot1, slot2):
         '''Load assigned blocks'''
+
+    @abstractmethod
+    def save_blocks(self, key, *blocks):
+        '''Save back blocks'''
 

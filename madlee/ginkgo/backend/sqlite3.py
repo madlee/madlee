@@ -65,7 +65,7 @@ class SqliteBackEnd(BasicBackEnd):
         self.__leaves[key] = (cursor.lastrowid, slot, size)
         self.__db.commit()
 
-    
+
     def load_blocks(self, key, slot1, slot2):
         cursor = self.__db.cursor()
         leaf_id = self.__leaf_ids[key]
