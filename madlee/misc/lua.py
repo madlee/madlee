@@ -53,7 +53,7 @@ LUA_TS_TO_TIME = '''
 local SECONDS_IN_AN_HOUR = 60*60
 local SECONDS_IN_A_DAY = 24*SECONDS_IN_AN_HOUR
 
-local ts_to_time = function(prefix, data, slot)
+local ts_to_slot = function(prefix, data, slot)
     local ts = unpack('d', string.sub(data, 1, 8))
     local year = redis.call('ZRANGE', prefix .. '|YEAR_START_TS', ts-366*SECONDS_IN_A_DAY, ts, 'WITHSCORES)[-1]
     if slot == 'Y' then

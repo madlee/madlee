@@ -41,7 +41,7 @@ class Ginkgo:
         self.__redis        = redis
         self.__backend = connect_backend(prefix, readonly, style)
 
-        scripts = redis.hgetall(prefix+'|SCRIPTS')
+        scripts = redis.hgetall(prefix+'|GINKGO-SCRIPTS')
         if scripts is None:
             scripts = self.prepare_redis()
         self.__luasha_push  = scripts['PUSH']
@@ -56,10 +56,10 @@ class Ginkgo:
         redis.zadd(self.__prefix+'|YEAR_START_TS', year_range)
 
         scripts = {k: redis.script_load(v) for k, v in ALL_LUA_SCRIPTS.items()}
-        redis.hmset(self.__prefix+'|SCRIPTS', scripts)
+        redis.hmset(self.__prefix+'|GINKGO-SCRIPTS', scripts)
 
         for key, (slot, size) in self.__backend.all_leaves.items():
-            self.__redis.hsetnx(self.__prefix+'LEAVES', key, '%s|%s' % (slot, size))
+            self.__redis.hsetnx(self.__prefix+'|GINKGO-LEAVES', key, '%s|%s' % (slot, size))
 
         return scripts
 
@@ -103,5 +103,6 @@ class Ginkgo:
 
     def ensure_get(self, key, ts1, ts2):
         '''Get data between ts1 ~ ts2. Reload the blocks if they are not existed'''
+        all_slots()
 
 

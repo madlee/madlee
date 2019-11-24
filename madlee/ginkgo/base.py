@@ -10,25 +10,44 @@ DEFAULT_YEAR_RANGE = [2000, 2100]
 
 
 LUA_PUSH_DATA = '''
+-- Push new data into redis and publish message when new block was created..
 %(TS_TO_TIME)s
 
 local prefix = KEYS[1]
-local key_base = KEYS[2]
+local leaf = KEYS[2]
 
-local slot = redis.call('HGET', prefix .. '|LEAVES', key_base)
+local slot = redis.call('HGET', prefix .. '|LEAVES', leaf)
 slot = slot.sub(slot, 1, string.find(slot, '|'))
 
 local i
+local last_ts = redis.call('HGET', prefix .. '|LAST_SLOT', leaf)
 for i = 1, #ARGV do
     local data = ARGV[i]
-    local ts = ts_to_date(prefix, data, slot)
-    local key = perfix .. '|' .. key_base .. '|' .. ts
+    local ts = ts_to_slot(prefix, data, slot)
+    local key = perfix .. '|' .. leaf .. '|' .. ts
     redis.call('RPUSH', key, data)
+
+    if ts != last_ts then 
+        if last_ts then 
+            local message = tostring(ts)
+            redis.call('PUBLISH', prefix .. '|NEW_SLOT|' .. leaf, message)
+        else 
+            local message = tostring(last_ts) .. '|' .. tostring(ts)
+            redis.call('PUBLISH', prefix .. '|NEW_SLOT|' .. leaf, message)
+        end
+        reds.call('HSET', prefix .. '|LAST_SLOT', leaf, ts)
+        last_ts = ts
+    end
 end
 
 ''' % {'TS_TO_TIME': LUA_TS_TO_TIME}
 
+
+
+
 LUA_LOAD_DATA = '''
+-- Load block data into redis and NO other side effects.
+
 %(TS_TO_TIME)s
 
 local prefix = KEYS[1]
@@ -38,7 +57,7 @@ local size = 0+slot.sub(slot, string.find(slot, '|')+1)
 slot = slot.sub(slot, 1, string.find(slot, '|'))
 
 if slot == 0 then
-    # TODO: 
+    -- TODO
 else
     local i, j
     for i = 1, #ARGV do
@@ -54,8 +73,14 @@ end
 '''
 
 
+
+
+
 ALL_LUA_SCRIPTS = {
-    'PUSH': LUA_PUSH_DATA
+    'PUSH': LUA_PUSH_DATA,
+    'LOAD': LUA_LOAD_DATA,
+    'LIST': LUA_LIST_SLOT,
+    'GET':  LUA_GET_DATA,
 }
 
 
