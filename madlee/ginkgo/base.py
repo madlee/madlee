@@ -8,6 +8,29 @@ from ..misc.lua import LUA_TS_TO_TIME, upload_scripts
 
 DEFAULT_YEAR_RANGE = [2000, 2100]
 
+LUA_FUNC_CALL = '''
+local ginkgo_call = function(prefix, name, ...)
+    local k, v
+    for k, v in pairs(...) do
+        name = name .. '|' ..  tostring(v)
+    end
+
+    redis.call('RPUSH', prefix .. '|GINKGO-TODOS', name)
+    redis.call('PUBLISH', prefix .. '|GINKGO-CALL', name)
+end
+'''
+
+
+LUA_RPC_CALL = '''
+%(FUNC_CALL)s
+
+local prefix = KEYS[1]
+local name = KEYS[2]
+
+ginkgo_call(prefix, name, table.unpack(ARGV))
+
+''' % {'FUNC_CALL': LUA_FUNC_CALL}
+
 
 LUA_PUSH_DATA = '''
 -- Push new data into redis and publish message when new block was created..
@@ -79,8 +102,8 @@ end
 ALL_LUA_SCRIPTS = {
     'PUSH': LUA_PUSH_DATA,
     'LOAD': LUA_LOAD_DATA,
-    'LIST': LUA_LIST_SLOT,
-    'GET':  LUA_GET_DATA,
+    # 'LIST': LUA_LIST_SLOT,
+    # 'GET':  LUA_GET_DATA,
 }
 
 
