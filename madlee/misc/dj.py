@@ -1,8 +1,12 @@
 from traceback import format_exc
 from django.http import JsonResponse, Http404, HttpResponseRedirect
 from django.conf import settings
+from django.shortcuts import render
 
 
+def render_template(request, **argv):
+    path = request.get_full_path()[1:]
+    return render(request, path, argv)
 
 
 def json_response(func):
