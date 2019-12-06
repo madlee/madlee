@@ -57,10 +57,11 @@ class Ginkgo:
         scripts = {k: redis.script_load(v) for k, v in ALL_LUA_SCRIPTS.items()}
         redis.hmset(GINKGO_SEPERATOR.join((self.__name, KEY_SCRIPTS)), scripts)
 
+        key_leaves = GINKGO_SEPERATOR.join((self.__name, KEY_LEAVES))
         for key, (slot, size) in self.__backend.all_leaves.items():
-            self.__redis.hsetnx(
-                GINKGO_SEPERATOR.join((self.__name, KEY_LEAVES)), 
-                key, GINKGO_SEPERATOR.join((str(slot), str(size))))
+            self.__redis.hsetnx(key_leaves, key, 
+                GINKGO_SEPERATOR.join((str(slot), str(size)))
+            )
 
         return scripts
 
