@@ -47,58 +47,67 @@ end
 '''
 
 
-
-
 LUA_TS_TO_TIME = '''
-local SECONDS_IN_AN_HOUR = 60*60
-local SECONDS_IN_A_DAY = 24*SECONDS_IN_AN_HOUR
 
-local ts_to_slot = function(prefix, data, slot)
-    local ts = unpack('d', string.sub(data, 1, 8))
-    local year = redis.call('ZRANGE', prefix .. '|YEAR_START_TS', ts-366*SECONDS_IN_A_DAY, ts, 'WITHSCORES)[-1]
+local SECONDS_IN_AN_HOUR = 60*60
+local SECONDS_IN_A_DAY   = 24*SECONDS_IN_AN_HOUR
+
+local ts_to_slot = function(key_year_ts, ts, slot)
+    local year_ts = redis.call('ZRANGEBYSCORE', key_year_ts, ts-366*SECONDS_IN_A_DAY, ts, 'WITHSCORES')
     if slot == 'Y' then
-        return year[0]
+        return year_ts[#year_ts-1]
     end 
 
-    local seconds_remains = ts - year[1]
-    year = year[0]
+    local seconds_remains = ts - tonumber(year_ts[#year_ts])
+    local year = tonumber(year_ts[#year_ts-1])
     local days = seconds_remains / SECONDS_IN_A_DAY
     local month, day
     local days_in_month = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
-    if local % 400 == 0 or local % 100 != 0 and local % 4 == 0 then
+    if year%400 == 0 or year%100 ~= 0 and year%4 == 0 then
         days_in_month[2] = 29
     end
-    for month = 1, #days_in_month do
-        local next_seconds_remains = seconds_remains - days_in_month[month]*SECONDS_IN_A_DAY
+    for i = 1, #days_in_month do
+        local next_seconds_remains = seconds_remains - days_in_month[i]*SECONDS_IN_A_DAY
         if next_seconds_remains < 0 then
+            month = i
             break
         end
         seconds_remains = next_seconds_remains
     end
-    month = year .. string.format('%02d', month)
+    
+    month = string.format('%04d%02d', year, month)
     if slot == 'm' then
         return month
     end
 
     local day = seconds_remains / SECONDS_IN_A_DAY
     day = day - day % 1
+    seconds_remains = seconds_remains - day * SECONDS_IN_A_DAY
+    day = day + 1
     day = month .. string.format('%02d', day)
     if slot == 'd' then
         return day
     end
-      
-    seconds_remains = seconds_remains - day * SECONDS_IN_A_DAY
-    seconds_remains = seconds_remains / slot
-    seconds_remains = (seconds_remains - seconds_remains % 1) * slot
+    if slot then 
+        seconds_remains = seconds_remains / slot
+        seconds_remains = (seconds_remains - seconds_remains % 1) * slot
+    end
 
     local hour = seconds_remains / SECONDS_IN_AN_HOUR
     hour = hour - hour % 1
     seconds_remains = seconds_remains - hour * SECONDS_IN_AN_HOUR
     local minute = seconds_remains / 60
     minute = minute - minute % 1
-    second = seconds_remains - minute*60
-    return day .. string.format('%02d%02d%02d', hour, minute, second)
+    local second = seconds_remains - minute*60
+    local result
+    if slot then 
+        result = string.format('%02d%02d%02d', hour, minute, second)
+    else 
+        result = string.format('%02d%02d%09.6f', hour, minute, second)
+    end
+    return day .. result
 end 
+
 '''
 
 
