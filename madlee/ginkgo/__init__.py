@@ -45,6 +45,7 @@ class Ginkgo:
         scripts = redis.hgetall('%s|%s' % (name, KEY_SCRIPTS))
         if not scripts:
             scripts = self.prepare_redis()
+        self.__sha = scripts
 
 
     def prepare_redis(self, year_range=DEFAULT_YEAR_RANGE):
@@ -74,6 +75,11 @@ class Ginkgo:
     @property
     def redis(self):
         return self.__redis
+
+
+    @property
+    def sha(self):
+        return self.__sha
 
 
     def add_leaf(self, key, slot, size=0):

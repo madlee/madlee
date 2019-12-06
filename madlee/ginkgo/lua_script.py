@@ -1,7 +1,7 @@
 from ..misc.lua import LUA_TS_TO_TIME, upload_scripts
 from .const import GINKGO_SEPERATOR, KEY_DAEMON, KEY_YEAR_TS
 from .const import KEY_LEAVES, SHA_NEW_LEAF, CMD_NEW_LEAF
-from .const import SHA_PUSH, SHA_MISSING
+from .const import SHA_PUSH, SHA_MISSING, SHA_LOAD, SHA_JOIN
 
 
 
@@ -112,18 +112,145 @@ return result
 }
 
 
+LUA_LOAD_DATA = '''
+-- Load block data into redis
+%(TS_TO_TIME)s
 
+local dbname = ARGV[1]
+local leaf   = ARGV[2]
+
+local slot = redis.call('HGET', dbname .. '%(sep)s' .. '%(leaves)s', leaf)
+local slotsize = tonumber(slot.sub(slot, string.find(slot, '%(sep)s')+1))
+slot = slot.sub(slot, string.find(slot, '%(sep)s')+1)
+
+local result = 0
+
+for i = 3, #ARGV do
+    local block = ARGV[i]
+    local ts = struct.unpack('d', string.sub(block, 1, 8))
+    local key = dbname .. '%(sep)s' .. '%(leaves)s' .. '%(sep)s' .. ts_to_slot(key_ts, ts, slot)
+    local data = {}
+    for j = 1, string.len(block), slotsize do
+        data[#data] = string.sub(block, j, j+slotsize-1)
+    end
+    redis.call('RPUSH', key, unpack(data))
+    result = result + #data
+end
+
+return result
+
+''' % {
+    'TS_TO_TIME': LUA_TS_TO_TIME,
+    'sep': GINKGO_SEPERATOR,
+    'leaves': KEY_LEAVES,
+    'year_ts': KEY_YEAR_TS
+}
+
+
+
+LUA_JOIN_DATA = '''
+%(TS_TO_TIME)s
+
+local dbname  = ARGV[1]
+local start   = tonumber(ARGV[2])
+local finish  = tonumber(ARGV[3])
+local leaf    = ARGV[4]
+
+local key_ts = dbname .. '%(sep)s' .. '%(year_ts)s'
+
+local slot = redis.call('HGET', dbname .. '%(sep)s' .. '%(leaves)s', leaf)
+slot = slot.sub(slot, string.find(slot, '%(sep)s')+1)
+
+start = ts_to_slot(key_ts, start, slot)
+finish = ts_to_slot(key_ts, finish, slot)
+local all_slots = list_slots(key_ts, start, finish, slot)
+
+local result = {}
+for i = 4, #ARGV do 
+    for j = 1, #all_slots do
+        local key = dbname .. '%(sep)s' .. leaf .. '%(sep)s' .. all_slots[j]
+        local data = redis.call('LRANGE', key, 0, -1)
+        if data then 
+            result[#result+1] = table.concat(data)
+        end
+    end
+end
+
+return result
+
+''' % {
+    'TS_TO_TIME': LUA_TS_TO_TIME,
+    'sep': GINKGO_SEPERATOR,
+    'leaves': KEY_LEAVES,
+    'year_ts': KEY_YEAR_TS
+}
+
+
+LUA_JOIN_SUB = '''
+%(TS_TO_TIME)s
+
+local dbname    = ARGV[1]
+local start     = tonumber(ARGV[2])
+local finish    = tonumber(ARGV[3])
+local offset    = tonumber(ARGV[4])
+local size      = tonumber(ARGV[5])
+local withstamp = tonumber(ARGV[6])
+local leaf      = ARGV[7]
+
+local key_ts = dbname .. '%(sep)s' .. '%(year_ts)s'
+
+local slot = redis.call('HGET', dbname .. '%(sep)s' .. '%(leaves)s', leaf)
+slot = slot.sub(slot, string.find(slot, '%(sep)s')-1)
+
+start = ts_to_slot(key_ts, start, slot)
+finish = ts_to_slot(key_ts, finish, slot)
+local all_slots = list_slots(key_ts, start, finish, slot)
+
+local result = {}
+local keybase = dbname .. '%(sep)s' .. leaf .. '%(sep)s'
+for i = 7, #ARGV do 
+    for j = 1, #all_slots do
+        local key = keybase .. all_slots[j]
+        local data = redis.call('LRANGE', key, 0, -1)
+        if data then 
+            local dd = {}
+            for k = 1, #data do
+                local s
+                if withstamp == 1 then
+                    s = string.sub(data[k], 1, 8) 
+                else
+                    s = ''
+                end
+                s = s .. string.sub(data[k], offset+1, offset+size)
+                dd[#dd+1] = s
+            end
+            result[#result+1] = table.concat(dd)
+        end
+    end
+end
+
+return result
+
+''' % {
+    'TS_TO_TIME': LUA_TS_TO_TIME,
+    'sep': GINKGO_SEPERATOR,
+    'leaves': KEY_LEAVES,
+    'year_ts': KEY_YEAR_TS
+}
+
+
+print ('$$'*20, LUA_JOIN_DATA)
 
 ALL_LUA_SCRIPTS = {
     SHA_PUSH:     LUA_PUSH_DATA,
     SHA_NEW_LEAF: LUA_NEW_LEAF,
-    SHA_MISSING:  LUA_MISSING_SLOTS
-    # 'LOAD': LUA_LOAD_DATA,
+    SHA_MISSING:  LUA_MISSING_SLOTS,
+    SHA_LOAD:     LUA_LOAD_DATA,
+    SHA_JOIN:     LUA_JOIN_DATA,
+
     # 'LIST': LUA_LIST_SLOT,
     # 'GET':  LUA_GET_DATA,
 }
-
-
 
 
 

@@ -7,8 +7,9 @@ from django_redis import get_redis_connection
 from ....misc.dj import run_forever
 from ... import Ginkgo
 from ...const import KEY_DAEMON, GINKGO_SEPERATOR
-from ...const import CMD_NEW_LEAF
-
+from ...const import CMD_NEW_LEAF, CMD_ENSURE
+from ...const import SHA_MISSING, SHA_LOAD
+from ...const import MSG_ENSURED
 
 
 
@@ -22,10 +23,30 @@ def add_leaf(logger, db, data):
         return False
 
 
+def ensure(logger, db, data):
+    data = data.split(GINKGO_SEPERATOR)
+    redis = db.redis
+    dbname = redis.name
+    call_back, start, finish, keys = data[0], data[1], data[2], data[3:]
+    sha_missing = db.sha[SHA_MISSING]
+    sha_load    = db.sha[SHA_LOAD]
+    for code in keys:
+        missing = redis.evalsha(sha_missing, 0, 
+            dbname, code, start, finish
+        )
+        blocks = []
+        for i in range(0, len(missing), 2):
+            m1, m2 = missing[i], missing[i+1]
+            blocks += db.get_blocks(code, m1, m2)
+        redis.evalsha(sha_load, dbname, code, *blocks)
+
+    redis.publish(call_back, MSG_ENSURED)
+        
 
 
 COMMAND_HANDLES = {
-    CMD_NEW_LEAF: add_leaf
+    CMD_NEW_LEAF: add_leaf,
+    CMD_ENSURE: ensure
 }
 
 

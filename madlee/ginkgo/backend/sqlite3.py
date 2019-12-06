@@ -57,7 +57,7 @@ class SqliteBackend(BasicBackend):
     '''Save in Sqlite DB'''
 
     def __init__(self, name, readonly=True):
-        self.__db = db = connect(name)
+        self.__db = db = connect(join_path('GINKGO', name))
         cursor = db.cursor()
         execute_sqls(SQL_PREPARE, cursor)
         leaves = list(cursor)
