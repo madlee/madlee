@@ -76,6 +76,16 @@ def main_loop(logger, redis, style, reset_redis, ginkgo_set):
                 pass
 
 
+@run_forever(5)
+def save_back(logger, redis, ginkgo_set, save_gap):
+    last_slots = {}
+    while True:
+        sleep(gap)
+        for k, v in ginkgo_set.items():
+            for leav in v.all_leaves:
+
+
+
 
 
 class Command(BaseCommand):
