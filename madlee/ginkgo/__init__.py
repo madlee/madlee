@@ -55,7 +55,14 @@ class Ginkgo:
         redis = self.__redis
         redis.zadd(GINKGO_SEPERATOR.join((self.__name, KEY_YEAR_TS)), year_range)
 
-        scripts = {k: redis.script_load(v) for k, v in ALL_LUA_SCRIPTS.items()}
+        scripts = ALL_LUA_SCRIPTS.copy()
+        try:
+            from conf.ginkgo import LUA_SCRIPTS
+            scripts.update(LUA_SCRIPTS)
+        except ImportError:
+            pass
+
+        scripts = {k: redis.script_load(v) for k, v in LUA_SCRIPTS.items()}
         redis.hmset(GINKGO_SEPERATOR.join((self.__name, KEY_SCRIPTS)), scripts)
 
         key_leaves = GINKGO_SEPERATOR.join((self.__name, KEY_LEAVES))
@@ -97,18 +104,9 @@ class Ginkgo:
         return GinkgoLeaf(key, slot, int(size))
 
 
-    def push(self, key, *data):
-        return self.__redis.evalsha(self.__luasha_push, 2, self.__name, key, *data)
+    def get_1st_slot(self, leaf):
+        return self.__backend.get_1st_slot(leaf)
 
 
-    def reload(self, key, ts1, ts2):
-        '''Load data from backend to redis between ts1 ~ ts2'''
-        blocks = self.__backend.load_blocks(key, ts1, ts2)
-        self.__redis.evalsha(self.__luasha_load, self.__name, key, *blocks)
-
-
-    def ensure_get(self, key, ts1, ts2):
-        '''Get data between ts1 ~ ts2. Reload the blocks if they are not existed'''
-        # all_slots()
-
-
+    def get_last_slot(self, leaf):
+        return self.__backend.get_last_slot(leaf)

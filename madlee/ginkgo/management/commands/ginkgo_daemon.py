@@ -51,9 +51,30 @@ COMMAND_HANDLES = {
 
 
 
+@run_forever(5)
+def save_back(logger, redis, ginkgo_set, save_gap):
+    last_slots = {}
+    for dbname, db in ginkgo_set.items():
+        for leaf in db.all_leaves.keys():
+            last_slots[(dbname, leaf)] = db.last_slot(leaf)
+
+    while True:
+        sleep(save_gap)
+        for dbname, db in ginkgo_set.items():
+            for leaf in db.all_leaves.keys():
+                keys = GINKGO_SEPERATOR.join(dbname, leaf, '*')
+                keys = redis.keys(keys)
+                last = last_slots.get((dbname, leaf), None)
+                if last:
+                    keys = [key for key in keys if int(key.split(GINKGO_SEPERATOR)[2]) >= last]
+                for key in keys:
+                    redis.evalsha(SHA_GET_SLOT, 0, )
+
+
+
 
 @run_forever(5)
-def main_loop(logger, redis, style, reset_redis, ginkgo_set):
+def main_loop(logger, redis, style, reset_redis, save_gap, ginkgo_set):
     redis = get_redis_connection(redis)
     ginkgo_set = {
         row: Ginkgo(redis, row, False, style)
@@ -62,6 +83,9 @@ def main_loop(logger, redis, style, reset_redis, ginkgo_set):
     if reset_redis:
         for row in ginkgo_set.values():
             ginkgo_set.prepare_redis()
+
+    if save_gap:
+        pass
 
     pubsub = redis.pubsub()
     pubsub.psubscribe(GINKGO_SEPERATOR.join(('*', KEY_DAEMON, '*')))
@@ -76,16 +100,6 @@ def main_loop(logger, redis, style, reset_redis, ginkgo_set):
                 pass
 
 
-@run_forever(5)
-def save_back(logger, redis, ginkgo_set, save_gap):
-    last_slots = {}
-    while True:
-        sleep(gap)
-        for k, v in ginkgo_set.items():
-            for leav in v.all_leaves:
-
-
-
 
 
 class Command(BaseCommand):
@@ -97,13 +111,11 @@ class Command(BaseCommand):
         parser.add_argument('--logger', default='ginkgo')
         parser.add_argument('--style', default=None)
         parser.add_argument('--reset-redis', default=False, action='store_true')
+        parser.add_argument('--save-gap', type=int, default=None)
         parser.add_argument('db', nargs='+')
 
 
-    def handle(self, logger, redis, style, reset_redis, db, *args, **options):
+    def handle(self, logger, redis, style, reset_redis, save_gap, db, *args, **options):
         logger = logging.getLogger(logger)
-        main_loop(logger, redis, style, reset_redis, db)
-        
+        main_loop(logger, redis, style, reset_redis, save_gap, db)
 
-
-    
