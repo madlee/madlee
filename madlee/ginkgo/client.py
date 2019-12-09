@@ -25,8 +25,9 @@ class SyncClient:
         self.__redis.evalsha(self.__sha_new_leaf, 0, self.__dbname, key, slot, size)
 
 
-    def push_data(self, key, *data):
-        self.__redis.evalsha(self.__sha_push, 0, self.__dbname, key, *data)
+    def push(self, key, *data):
+        result = self.__redis.evalsha(self.__sha_push, 0, self.__dbname, key, *data)
+        print (result)
 
 
     def missing_slots(self, key, start, finish):

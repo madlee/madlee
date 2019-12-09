@@ -36,13 +36,11 @@ local leaf = ARGV[2]
 local key_ts = dbname .. '%(sep)s' .. '%(year_ts)s'
 
 local slot = redis.call('HGET', dbname .. '%(sep)s' .. '%(leaves)s', leaf)
-if slot == nil then
-    local sha_autoleaf = redis.call('HGET', dbname .. '%(sep)s' .. '%(scripts)s', '%(auto_leaf)s')
-    if sha_autoleaf then
-        slot = redis.call('EVALSHA', sha_autoleaf, 0, leaf)[1]
-    end
+if slot then 
+    slot = string.sub(slot, 1, string.find(slot, '%(sep)s')-1)
 else
-    slot = slot.sub(slot, 1, string.find(slot, '%(sep)s')-1)
+    local sha_autoleaf = redis.call('HGET', dbname .. '%(sep)s' .. '%(scripts)s', '%(auto_leaf)s')
+    slot = redis.call('EVALSHA', sha_autoleaf, 0, leaf)[1]
 end
 
 for i = 3, #ARGV do
@@ -61,9 +59,6 @@ end
     'scripts': KEY_SCRIPTS,
     'auto_leaf': SHA_AUTO_LEAF
 }
-
-
-print (LUA_PUSH_DATA)
 
 
 LUA_MISSING_SLOTS = '''
