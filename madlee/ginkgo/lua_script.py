@@ -1,7 +1,7 @@
 from ..misc.lua import LUA_TS_TO_TIME, upload_scripts
 from .const import GINKGO_SEPERATOR, KEY_DAEMON, KEY_YEAR_TS, KEY_SCRIPTS
 from .const import KEY_LEAVES, SHA_NEW_LEAF, CMD_NEW_LEAF
-from .const import SHA_PUSH, SHA_MISSING, SHA_LOAD, SHA_JOIN, SHA_AUOT_LEAF
+from .const import SHA_PUSH, SHA_MISSING, SHA_LOAD, SHA_JOIN, SHA_AUTO_LEAF
 
 
 
@@ -39,10 +39,11 @@ local slot = redis.call('HGET', dbname .. '%(sep)s' .. '%(leaves)s', leaf)
 if slot == nil then
     local sha_autoleaf = redis.call('HGET', dbname .. '%(sep)s' .. '%(scripts)s', '%(auto_leaf)s')
     if sha_autoleaf then
-        slot = redis.call('EVALSHA', sha_autoleaf, 0, leaf)
+        slot = redis.call('EVALSHA', sha_autoleaf, 0, leaf)[1]
     end
+else
+    slot = slot.sub(slot, 1, string.find(slot, '%(sep)s')-1)
 end
-slot = slot.sub(slot, 1, string.find(slot, '%(sep)s')-1)
 
 for i = 3, #ARGV do
     local data = ARGV[i]
@@ -58,8 +59,11 @@ end
     'leaves': KEY_LEAVES,
     'year_ts': KEY_YEAR_TS,
     'scripts': KEY_SCRIPTS,
-    'auto_leaf': SHA_AUOT_LEAF
+    'auto_leaf': SHA_AUTO_LEAF
 }
+
+
+print (LUA_PUSH_DATA)
 
 
 LUA_MISSING_SLOTS = '''

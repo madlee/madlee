@@ -62,7 +62,7 @@ class Ginkgo:
         except ImportError:
             pass
 
-        scripts = {k: redis.script_load(v) for k, v in LUA_SCRIPTS.items()}
+        scripts = {k: redis.script_load(v) for k, v in scripts.items()}
         redis.hmset(GINKGO_SEPERATOR.join((self.__name, KEY_SCRIPTS)), scripts)
 
         key_leaves = GINKGO_SEPERATOR.join((self.__name, KEY_LEAVES))
