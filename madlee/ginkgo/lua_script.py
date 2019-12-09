@@ -1,7 +1,8 @@
 from ..misc.lua import LUA_TS_TO_TIME, upload_scripts
-from .const import GINKGO_SEPERATOR, KEY_DAEMON, KEY_YEAR_TS
+from .const import GINKGO_SEPERATOR, KEY_DAEMON, KEY_YEAR_TS, KEY_SCRIPTS
 from .const import KEY_LEAVES, SHA_NEW_LEAF, CMD_NEW_LEAF
-from .const import SHA_PUSH, SHA_MISSING, SHA_LOAD, SHA_JOIN
+from .const import SHA_PUSH, SHA_MISSING, SHA_LOAD, SHA_JOIN, SHA_AUOT_LEAF
+
 
 
 
@@ -35,6 +36,12 @@ local leaf = ARGV[2]
 local key_ts = dbname .. '%(sep)s' .. '%(year_ts)s'
 
 local slot = redis.call('HGET', dbname .. '%(sep)s' .. '%(leaves)s', leaf)
+if slot == nil then
+    local sha_autoleaf = redis.call('HGET', dbname .. '%(sep)s' .. '%(scripts)s', '%(auto_leaf)s')
+    if sha_autoleaf then
+        slot = redis.call('EVALSHA', sha_autoleaf, 0, leaf)
+    end
+end
 slot = slot.sub(slot, 1, string.find(slot, '%(sep)s')-1)
 
 for i = 3, #ARGV do
@@ -49,7 +56,9 @@ end
     'TS_TO_TIME': LUA_TS_TO_TIME,
     'sep': GINKGO_SEPERATOR,
     'leaves': KEY_LEAVES,
-    'year_ts': KEY_YEAR_TS
+    'year_ts': KEY_YEAR_TS,
+    'scripts': KEY_SCRIPTS,
+    'auto_leaf': SHA_AUOT_LEAF
 }
 
 
@@ -147,6 +156,31 @@ return result
 }
 
 
+LUA_GET_SLOT = '''
+
+local key       = KEYS[0]
+local size      = ARGV[1]
+
+local data = redis.call('LRANGE', key, 0, -1)
+
+if size == 0 then
+    local result = {}
+    result[1] = struct.pack('l', #data)
+    local offset = 0
+    for i = 1, #data do
+        offset = offset + string.len(data[i])
+        result[#result+1] = struct.pack('l', offset)
+    end
+    for i = 1, #data do
+        result[#result+1] = data[i]
+    end
+else
+    result = data
+end 
+
+return table.concat(result)
+
+'''
 
 LUA_JOIN_DATA = '''
 %(TS_TO_TIME)s
@@ -184,6 +218,8 @@ return result
     'leaves': KEY_LEAVES,
     'year_ts': KEY_YEAR_TS
 }
+
+
 
 
 LUA_JOIN_SUB = '''
@@ -237,9 +273,6 @@ return result
     'leaves': KEY_LEAVES,
     'year_ts': KEY_YEAR_TS
 }
-
-
-print ('$$'*20, LUA_JOIN_DATA)
 
 ALL_LUA_SCRIPTS = {
     SHA_PUSH:     LUA_PUSH_DATA,
