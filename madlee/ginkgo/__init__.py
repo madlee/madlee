@@ -55,12 +55,7 @@ class Ginkgo:
         redis = self.__redis
         redis.zadd(GINKGO_SEPERATOR.join((self.__name, KEY_YEAR_TS)), year_range)
 
-        scripts = ALL_LUA_SCRIPTS.copy()
-        from conf.ginkgo import LUA_SCRIPTS
-        scripts.update(LUA_SCRIPTS)
-        
-
-        scripts = {k: redis.script_load(v) for k, v in scripts.items()}
+        scripts = {k: redis.script_load(v) for k, v in ALL_LUA_SCRIPTS.items()}
         redis.hmset(GINKGO_SEPERATOR.join((self.__name, KEY_SCRIPTS)), scripts)
 
         key_leaves = GINKGO_SEPERATOR.join((self.__name, KEY_LEAVES))
