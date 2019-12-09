@@ -1,35 +1,28 @@
-from ..misc.lua import LUA_TS_TO_TIME, upload_scripts
+from ..misc.lua import upload_scripts
 from .const import GINKGO_SEPERATOR, KEY_DAEMON, KEY_YEAR_TS, KEY_SCRIPTS
 from .const import KEY_LEAVES, SHA_NEW_LEAF, CMD_NEW_LEAF
 from .const import SHA_PUSH, SHA_MISSING, SHA_LOAD, SHA_JOIN, SHA_AUTO_LEAF
 
 
+try:
+    from conf.ginkgo import LUA_FUNCTION_SET 
+except ImportError:
+    from .lua_function import LUA_FUNCTION_SET
 
 
 LUA_NEW_LEAF = '''
-local key = ARGV[1] .. '%(sep)s' .. '%(leaves)s'
-local leafname = ARGV[2]
+%(FUNC_NEW_LEAF)s
 
-local data = tostring(ARGV[3]) .. '%(sep)s' .. tostring(ARGV[4])
+new_leaf(ARGV[1], ARGV[2], ARGV[3], ARGV[4])
 
-if redis.call('HSETNX', key, leafname, data) then
-    key = ARGV[1] .. '%(sep)s' .. '%(daemon)s' .. '%(sep)s' .. '%(new_leaf)s'
-    data = leafname .. '%(sep)s' .. data
-    redis.call('PUBLISH', key, data)
-end
-
-''' % {
-    'sep': GINKGO_SEPERATOR, 
-    'daemon': KEY_DAEMON,
-    'leaves': KEY_LEAVES, 
-    'new_leaf': CMD_NEW_LEAF
-}
+''' % LUA_FUNCTION_SET
 
 
 
 LUA_PUSH_DATA = '''
 -- Push new data into redis
-%(TS_TO_TIME)s
+%(FUNC_TS_TO_TIME)s
+%(FUNC_AUTO_LEAF)s
 
 local dbname = ARGV[1]
 local leaf = ARGV[2]
@@ -39,8 +32,7 @@ local slot = redis.call('HGET', dbname .. '%(sep)s' .. '%(leaves)s', leaf)
 if slot then 
     slot = string.sub(slot, 1, string.find(slot, '%(sep)s')-1)
 else
-    local sha_autoleaf = redis.call('HGET', dbname .. '%(sep)s' .. '%(scripts)s', '%(auto_leaf)s')
-    slot = redis.call('EVALSHA', sha_autoleaf, 0, leaf)[1]
+    slot = auto_leaf(dbname, leaf)
 end
 
 for i = 3, #ARGV do
@@ -52,7 +44,8 @@ for i = 3, #ARGV do
 end
 
 ''' % {
-    'TS_TO_TIME': LUA_TS_TO_TIME,
+    'FUNC_TS_TO_TIME': LUA_FUNCTION_SET['FUNC_TS_TO_TIME'],
+    'FUNC_AUTO_LEAF': LUA_FUNCTION_SET['FUNC_AUTO_LEAF'],
     'sep': GINKGO_SEPERATOR,
     'leaves': KEY_LEAVES,
     'year_ts': KEY_YEAR_TS,
@@ -63,7 +56,7 @@ end
 
 LUA_MISSING_SLOTS = '''
 
-%(TS_TO_TIME)s
+%(FUNC_TS_TO_TIME)s
 
 local dbname = ARGV[1]
 local leaf   = ARGV[2]
@@ -113,7 +106,7 @@ end
 return result
 
 ''' % {
-    'TS_TO_TIME': LUA_TS_TO_TIME,
+    'FUNC_TS_TO_TIME': LUA_FUNCTION_SET['FUNC_TS_TO_TIME'],
     'sep': GINKGO_SEPERATOR,
     'leaves': KEY_LEAVES,
     'year_ts': KEY_YEAR_TS
@@ -122,7 +115,7 @@ return result
 
 LUA_LOAD_DATA = '''
 -- Load block data into redis
-%(TS_TO_TIME)s
+%(FUNC_TS_TO_TIME)s
 
 local dbname = ARGV[1]
 local leaf   = ARGV[2]
@@ -148,7 +141,7 @@ end
 return result
 
 ''' % {
-    'TS_TO_TIME': LUA_TS_TO_TIME,
+    'FUNC_TS_TO_TIME': LUA_FUNCTION_SET['FUNC_TS_TO_TIME'],
     'sep': GINKGO_SEPERATOR,
     'leaves': KEY_LEAVES,
     'year_ts': KEY_YEAR_TS
@@ -182,7 +175,7 @@ return table.concat(result)
 '''
 
 LUA_JOIN_DATA = '''
-%(TS_TO_TIME)s
+%(FUNC_TS_TO_TIME)s
 
 local dbname  = ARGV[1]
 local start   = tonumber(ARGV[2])
@@ -212,7 +205,7 @@ end
 return result
 
 ''' % {
-    'TS_TO_TIME': LUA_TS_TO_TIME,
+    'FUNC_TS_TO_TIME': LUA_FUNCTION_SET['FUNC_TS_TO_TIME'],
     'sep': GINKGO_SEPERATOR,
     'leaves': KEY_LEAVES,
     'year_ts': KEY_YEAR_TS
@@ -222,7 +215,7 @@ return result
 
 
 LUA_JOIN_SUB = '''
-%(TS_TO_TIME)s
+%(FUNC_TS_TO_TIME)s
 
 local dbname    = ARGV[1]
 local start     = tonumber(ARGV[2])
@@ -267,7 +260,7 @@ end
 return result
 
 ''' % {
-    'TS_TO_TIME': LUA_TS_TO_TIME,
+    'FUNC_TS_TO_TIME': LUA_FUNCTION_SET['FUNC_TS_TO_TIME'],
     'sep': GINKGO_SEPERATOR,
     'leaves': KEY_LEAVES,
     'year_ts': KEY_YEAR_TS
