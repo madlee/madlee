@@ -1,5 +1,6 @@
 import logging
 from time import sleep, time as now
+from threading import Thread
 from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 from django_redis import get_redis_connection
@@ -52,26 +53,22 @@ COMMAND_HANDLES = {
 
 
 @run_forever(5)
-def save_back(logger, redis, ginkgo_set, save_gap):
+def save_back(logger, ginkgo_set, save_gap):
     last_slots = {}
     for dbname, db in ginkgo_set.items():
         for leaf in db.all_leaves.keys():
             last_slots[(dbname, leaf)] = db.last_slot(leaf)
+            
 
     while True:
         sleep(save_gap)
         for dbname, db in ginkgo_set.items():
             for leaf in db.all_leaves.keys():
-                keys = GINKGO_SEPERATOR.join(dbname, leaf, '*')
-                keys = redis.keys(keys)
-                last = last_slots.get((dbname, leaf), None)
-                if last:
-                    keys = [key for key in keys if int(key.split(GINKGO_SEPERATOR)[2]) >= last]
-                for key in keys:
-                    redis.evalsha(SHA_GET_SLOT, 0, )
+                blocks = db.newer_blocks(leaf, last_slots[leaf])
 
 
 
+save_job = None
 
 @run_forever(5)
 def main_loop(logger, redis, style, reset_redis, save_gap, ginkgo_set):
@@ -85,7 +82,11 @@ def main_loop(logger, redis, style, reset_redis, save_gap, ginkgo_set):
             ginkgo_set.prepare_redis()
 
     if save_gap:
-        pass
+        global save_job
+        if save_job is None:
+            save_job = Thread(target=save_back, args=(logger, ginkgo_set, save_gap))
+            save_job.start()
+
 
     pubsub = redis.pubsub()
     pubsub.psubscribe(GINKGO_SEPERATOR.join(('*', KEY_DAEMON, '*')))

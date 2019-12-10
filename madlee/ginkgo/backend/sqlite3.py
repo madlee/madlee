@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS ginkgo_blocks (
     leaf INTEGER REFERENCES ginkgo_leaf(id),
     slot INTEGER, size INTEGER, 
     start DOUBLE, finish DOUBLE,
-    data BINARY
+    data BINARY,
+    CONSTRAINT UNIQUE (leaf, slot)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ginkgo_index 
@@ -38,7 +39,7 @@ FROM ginkgo_blocks
 WHERE leaf = ? AND ? <= slot AND slot <= ?
 '''
 
-SQL_SAVE_BLOCKS = '''INSERT INTO ginkgo_blocks
+SQL_SAVE_BLOCKS = '''INSERT OR REPLACE INTO ginkgo_blocks
 (leaf, slot, size, start, finish, data) VALUES (?, ?, ?, ?, ?, ?)
 '''
 

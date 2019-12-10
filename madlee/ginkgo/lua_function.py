@@ -26,9 +26,56 @@ local auto_leaf = function(dbname, leafname)
 end 
 '''
 
+LUA_FUNC_JOIN_BLOCK = '''
+local join_block = function(key, size)
+    local data = redis.call('LRANGE', key, 0, -1)
+    local result
+    local length = #data
+    local start = string.sub(data[1], 1, 8)
+    local finish = string.sub(data[#data], 1, 8)
+
+    if size == 0 then
+        result = {}
+        result[1] = struct.pack('l', #data)
+        local offset = 0
+        for i = 1, #data do
+            offset = offset + string.len(data[i])
+            result[#result+1] = struct.pack('l', offset)
+        end
+        for i = 1, #data do
+            result[#result+1] = data[i]
+        end
+    else
+        result = data
+    end 
+
+    return {length, start, finish, table.concat(result)}
+end
+
+'''
+
+
+
+LUA_FUNC_JOIN_SUB = '''
+local join_sub = function(key, offset, size, withts)
+    local data = redis.call('LRANGE', key, 0, -1)
+    local result = {}
+    for i = 1, #data do
+        if withts then
+            result[#result+1] = string.sub(data[i], 1, 8)
+        end
+        result[#result+1] = string.sub(data[i], offset+1, offset+size)
+    end
+    return table.concat(result)
+end
+'''
+
+
 LUA_FUNCTION_SET = {
     'FUNC_NEW_LEAF':  LUA_FUNC_NEW_LEAF,
     'FUNC_AUTO_LEAF': LUA_FUNC_AUTO_LEAF,
-    'FUNC_TS_TO_TIME': LUA_TS_TO_TIME
+    'FUNC_TS_TO_TIME': LUA_TS_TO_TIME,
+    'FUNC_JOIN_BLOCK': LUA_FUNC_JOIN_BLOCK,
+    'FUNC_JOIN_SUB': LUA_FUNC_JOIN_SUB
 }
 

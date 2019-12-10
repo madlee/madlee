@@ -4,7 +4,7 @@ from .base import to_slot, DateTime
 from .base import DEFAULT_YEAR_RANGE, SLOT_TS_SIZE, SECONDS_IN_A_DAY
 from .backend import connect_backend
 from .const import GINKGO_SEPERATOR, KEY_SCRIPTS, KEY_YEAR_TS, KEY_LEAVES
-
+from .const import SHA_ALL_SLOTS, SHA_NEWER_SLOTS
 
 class GinkgoError(RuntimeError):
     pass
@@ -90,10 +90,10 @@ class Ginkgo:
 
 
     def get_leaf(self, key):
-        slot = self.__redis.hget(self.__name+'LEAVES', key)
+        slot = self.__redis.hget(GINKGO_SEPERATOR.join((self.__name, KEY_LEAVES)), key)
         if not slot:
             raise GinkgoError('Leaf [%s] is NOT exist.')
-        slot, size = slot.split('|')
+        slot, size = slot.split(GINKGO_SEPERATOR)
         return GinkgoLeaf(key, slot, int(size))
 
 
@@ -103,3 +103,14 @@ class Ginkgo:
 
     def get_last_slot(self, leaf):
         return self.__backend.get_last_slot(leaf)
+
+
+    def newer_blocks(self, leaf, slot=None):
+        if slot:
+            return self.__redis.evalsha(self.__sha[SHA_NEWER_SLOTS], 0, self.__name, leaf, slot)
+        else:
+            return self.__redis.evalsha(self.__sha[SHA_ALL_SLOTS], 0, self.__name, leaf)
+
+    def save_blocks(self, leaf, blocks):
+        self.__backend.save_blocks(leaf, blocks)        
+        

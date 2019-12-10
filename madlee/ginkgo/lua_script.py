@@ -2,7 +2,7 @@ from ..misc.lua import upload_scripts
 from .const import GINKGO_SEPERATOR, KEY_DAEMON, KEY_YEAR_TS, KEY_SCRIPTS
 from .const import KEY_LEAVES, SHA_NEW_LEAF, CMD_NEW_LEAF
 from .const import SHA_PUSH, SHA_MISSING, SHA_LOAD, SHA_JOIN, SHA_AUTO_LEAF
-
+from .const import SHA_ALL_SLOTS, SHA_NEWER_SLOTS
 
 try:
     from conf.ginkgo import LUA_FUNCTION_SET 
@@ -51,6 +51,72 @@ end
     'year_ts': KEY_YEAR_TS,
     'scripts': KEY_SCRIPTS,
     'auto_leaf': SHA_AUTO_LEAF
+}
+
+
+
+LUA_LIST_ALL_SLOTS = '''
+local dbname = ARGV[1]
+local leaf   = ARGV[2]
+
+local slot = redis.call('HGET', dbname .. '%(sep)s' .. '%(leaves)s', leaf)
+local size = tonumber(slot.sub(slot, string.find(slot, '%(sep)s')+1))
+
+local key_slots = dbname .. '%(sep)s' .. leaf .. '%(sep)s*' 
+local existed_keys = redis.call('KEYS', key_slots)
+
+local result = {}
+for i = 1, #existed_keys: 
+    local key = existed_keys[i]
+    local pos = string.len(key) - string.find(string.reverse(key), '|') + 1
+    local slot_s = string.sub(key, pos+1)
+    result[#result+1] = slot_s
+    local data = join_block(key, size)
+    result[#result+1] = data[1]
+    result[#result+1] = data[2]
+    result[#result+1] = data[3]
+    result[#result+1] = data[4]
+end
+
+return result
+''' % {
+    'sep': GINKGO_SEPERATOR,
+    'leaves': KEY_LEAVES,
+}
+
+
+LUA_LIST_NEWER_SLOTS = '''
+local dbname = ARGV[1]
+local leaf   = ARGV[2]
+local last_slot = ARGV[3]
+
+local slot = redis.call('HGET', dbname .. '%(sep)s' .. '%(leaves)s', leaf)
+local size = tonumber(slot.sub(slot, string.find(slot, '%(sep)s')+1))
+
+local key_slots = dbname .. '%(sep)s' .. leaf .. '%(sep)s*' 
+local existed_keys = redis.call('KEYS', key_slots)
+
+local result = {}
+for i = 1, #existed_keys: 
+    local key = existed_keys[i]
+    local pos = string.len(key) - string.find(string.reverse(key), '|') + 1
+    local slot_s = string.sub(key, pos+1)
+    if slot_s < last_slot then
+        continue
+    else
+        result[#result+1] = slot_s
+        local data = join_block(key, size)
+        result[#result+1] = data[1]
+        result[#result+1] = data[2]
+        result[#result+1] = data[3]
+        result[#result+1] = data[4]
+    end
+end
+
+return result
+''' % {
+    'sep': GINKGO_SEPERATOR,
+    'leaves': KEY_LEAVES,
 }
 
 
@@ -153,29 +219,12 @@ LUA_GET_SLOT = '''
 local key       = KEYS[0]
 local size      = ARGV[1]
 
-local data = redis.call('LRANGE', key, 0, -1)
-
-if size == 0 then
-    local result = {}
-    result[1] = struct.pack('l', #data)
-    local offset = 0
-    for i = 1, #data do
-        offset = offset + string.len(data[i])
-        result[#result+1] = struct.pack('l', offset)
-    end
-    for i = 1, #data do
-        result[#result+1] = data[i]
-    end
-else
-    result = data
-end 
-
-return table.concat(result)
 
 '''
 
 LUA_JOIN_DATA = '''
 %(FUNC_TS_TO_TIME)s
+%(FUNC_JOIN_BLOCK)s
 
 local dbname  = ARGV[1]
 local start   = tonumber(ARGV[2])
@@ -185,6 +234,7 @@ local leaf    = ARGV[4]
 local key_ts = dbname .. '%(sep)s' .. '%(year_ts)s'
 
 local slot = redis.call('HGET', dbname .. '%(sep)s' .. '%(leaves)s', leaf)
+local slotsize = tonumber(slot.sub(slot, string.find(slot, '%(sep)s')+1))
 slot = slot.sub(slot, string.find(slot, '%(sep)s')+1)
 
 start = ts_to_slot(key_ts, start, slot)
@@ -195,10 +245,8 @@ local result = {}
 for i = 4, #ARGV do 
     for j = 1, #all_slots do
         local key = dbname .. '%(sep)s' .. leaf .. '%(sep)s' .. all_slots[j]
-        local data = redis.call('LRANGE', key, 0, -1)
-        if data then 
-            result[#result+1] = table.concat(data)
-        end
+        local data = join_block(key, slotsize)
+        result[#result+1] = data
     end
 end
 
@@ -206,6 +254,7 @@ return result
 
 ''' % {
     'FUNC_TS_TO_TIME': LUA_FUNCTION_SET['FUNC_TS_TO_TIME'],
+    'FUNC_JOIN_BLOCK': LUA_FUNCTION_SET['FUNC_JOIN_BLOCK'],
     'sep': GINKGO_SEPERATOR,
     'leaves': KEY_LEAVES,
     'year_ts': KEY_YEAR_TS
@@ -272,6 +321,9 @@ ALL_LUA_SCRIPTS = {
     SHA_MISSING:  LUA_MISSING_SLOTS,
     SHA_LOAD:     LUA_LOAD_DATA,
     SHA_JOIN:     LUA_JOIN_DATA,
+
+    SHA_ALL_SLOTS:   LUA_LIST_ALL_SLOTS,
+    SHA_NEWER_SLOTS: LUA_LIST_NEWER_SLOTS,
 
     # 'LIST': LUA_LIST_SLOT,
     # 'GET':  LUA_GET_DATA,
