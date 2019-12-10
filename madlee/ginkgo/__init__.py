@@ -108,9 +108,19 @@ class Ginkgo:
 
     def newer_blocks(self, leaf, slot=None):
         if slot:
-            return self.__redis.evalsha(self.__sha[SHA_NEWER_SLOTS], 0, self.__name, leaf, slot)
+            blocks = self.__redis.evalsha(self.__sha[SHA_NEWER_SLOTS], 0, self.__name, leaf, slot)
         else:
-            return self.__redis.evalsha(self.__sha[SHA_ALL_SLOTS], 0, self.__name, leaf)
+            blocks = self.__redis.evalsha(self.__sha[SHA_ALL_SLOTS], 0, self.__name, leaf)
+
+        blocks = [(
+                blocks[i], blocks[i+1], 
+                unpack('d', blocks[i+2])[0], 
+                unpack('d', blocks[i+3])[0], 
+                blocks[i+4]
+            ) for i in range(0, len(blocks), 5)
+        ]
+        return blocks
+
 
     def save_blocks(self, leaf, *blocks):
         self.__backend.save_blocks(leaf, *blocks)        

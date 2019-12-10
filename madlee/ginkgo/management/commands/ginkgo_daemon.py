@@ -7,7 +7,7 @@ from django_redis import get_redis_connection
 
 from ....misc.dj import run_forever
 from ... import Ginkgo
-from ...const import KEY_DAEMON, GINKGO_SEPERATOR
+from ...const import KEY_DAEMON, GINKGO_SEPERATOR, KEY_LEAVES
 from ...const import CMD_NEW_LEAF, CMD_ENSURE
 from ...const import SHA_MISSING, SHA_LOAD
 from ...const import MSG_ENSURED
@@ -56,16 +56,25 @@ COMMAND_HANDLES = {
 def save_back(logger, ginkgo_set, save_gap):
     last_slots = {}
     for dbname, db in ginkgo_set.items():
-        for leaf in db.all_leaves.keys():
+        db_leaves = db.all_leaves
+        for leaf in db_leaves.keys():
             last_slots[(dbname, leaf)] = db.last_slot(leaf)
-            
+        leaves = db.redis.hgetall(GINKGO_SEPERATOR.join(dbname, KEY_LEAVES))
+        for k, v in leaves.items():
+            k = k.decode()
+            if k not in db_leaves:
+                v = v.decode()
+                slot, size = v.split(GINKGO_SEPERATOR)
+                db.add_leaf(k, slot, size)
 
     while True:
         sleep(save_gap)
         for dbname, db in ginkgo_set.items():
             for leaf in db.all_leaves.keys():
-                blocks = db.newer_blocks(leaf, last_slots[leaf])
-
+                blocks = db.newer_blocks(leaf, last_slots[(dbname, leaf)])
+                if blocks:
+                    last_slots[(dbname, leaf)] = max([row[0] for row in blocks])
+                    db.save_blocks(leaf, *blocks)
 
 
 save_job = None
