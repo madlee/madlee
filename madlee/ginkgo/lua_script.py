@@ -56,6 +56,8 @@ end
 
 
 LUA_LIST_ALL_SLOTS = '''
+%(FUNC_JOIN_BLOCK)s
+
 local dbname = ARGV[1]
 local leaf   = ARGV[2]
 
@@ -66,7 +68,7 @@ local key_slots = dbname .. '%(sep)s' .. leaf .. '%(sep)s*'
 local existed_keys = redis.call('KEYS', key_slots)
 
 local result = {}
-for i = 1, #existed_keys: 
+for i = 1, #existed_keys do 
     local key = existed_keys[i]
     local pos = string.len(key) - string.find(string.reverse(key), '|') + 1
     local slot_s = string.sub(key, pos+1)
@@ -80,12 +82,15 @@ end
 
 return result
 ''' % {
+    'FUNC_JOIN_BLOCK': LUA_FUNCTION_SET['FUNC_JOIN_BLOCK'],
     'sep': GINKGO_SEPERATOR,
     'leaves': KEY_LEAVES,
 }
 
 
 LUA_LIST_NEWER_SLOTS = '''
+%(FUNC_JOIN_BLOCK)s
+
 local dbname = ARGV[1]
 local leaf   = ARGV[2]
 local last_slot = ARGV[3]
@@ -97,13 +102,11 @@ local key_slots = dbname .. '%(sep)s' .. leaf .. '%(sep)s*'
 local existed_keys = redis.call('KEYS', key_slots)
 
 local result = {}
-for i = 1, #existed_keys: 
+for i = 1, #existed_keys do 
     local key = existed_keys[i]
     local pos = string.len(key) - string.find(string.reverse(key), '|') + 1
     local slot_s = string.sub(key, pos+1)
-    if slot_s < last_slot then
-        continue
-    else
+    if slot_s >= last_slot then
         result[#result+1] = slot_s
         local data = join_block(key, size)
         result[#result+1] = data[1]
@@ -115,6 +118,7 @@ end
 
 return result
 ''' % {
+    'FUNC_JOIN_BLOCK': LUA_FUNCTION_SET['FUNC_JOIN_BLOCK'],
     'sep': GINKGO_SEPERATOR,
     'leaves': KEY_LEAVES,
 }

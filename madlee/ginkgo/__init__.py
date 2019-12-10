@@ -45,6 +45,8 @@ class Ginkgo:
         scripts = redis.hgetall('%s|%s' % (name, KEY_SCRIPTS))
         if not scripts:
             scripts = self.prepare_redis()
+        else:
+            scripts = {k.decode(): v.decode() for k, v in scripts.items()}
         self.__sha = scripts
 
 
@@ -84,7 +86,6 @@ class Ginkgo:
 
     def add_leaf(self, key, slot, size=0):
         added = self.__redis.hget(GINKGO_SEPERATOR.join((self.__name, KEY_LEAVES)), key)
-        assert added == GINKGO_SEPERATOR.join((str(slot), str(size)))
         self.__backend.add_leaf(key, slot, size)
         return GinkgoLeaf(key, slot, size)
 
@@ -111,6 +112,6 @@ class Ginkgo:
         else:
             return self.__redis.evalsha(self.__sha[SHA_ALL_SLOTS], 0, self.__name, leaf)
 
-    def save_blocks(self, leaf, blocks):
-        self.__backend.save_blocks(leaf, blocks)        
+    def save_blocks(self, leaf, *blocks):
+        self.__backend.save_blocks(leaf, *blocks)        
         

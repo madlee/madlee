@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS ginkgo_blocks (
     slot INTEGER, size INTEGER, 
     start DOUBLE, finish DOUBLE,
     data BINARY,
-    CONSTRAINT UNIQUE (leaf, slot)
+    UNIQUE (leaf, slot)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ginkgo_index 
@@ -95,22 +95,29 @@ class SqliteBackend(BasicBackend):
         blocks = self.prepare_blocks(key, blocks)
         blocks = [(leaf_id, row[0], row[1], row[2], row[3], row[4]) for row in blocks]
         cursor.executemany(SQL_SAVE_BLOCKS, blocks)
+        self.__db.commit()
 
 
     def get_last_slot(self, key):
         '''Get last slot'''
-        cursor = self.__db.cursor()
-        leaf_id = self.__leaf_ids[key]
-        cursor.execute(SQL_SELECT_LAST_SLOT, (leaf_id, ))
-        return cursor.fetchone()[0]
+        try:
+            cursor = self.__db.cursor()
+            leaf_id = self.__leaf_ids[key]
+            cursor.execute(SQL_SELECT_LAST_SLOT, (leaf_id, ))
+            return cursor.fetchone()[0]
+        except KeyError:
+            return None
 
     
     def get_1st_slot(self, key):
         '''Get the 1st slot'''
         cursor = self.__db.cursor()
-        leaf_id = self.__leaf_ids[key]
-        cursor.execute(SQL_SELECT_1ST_SLOT, (leaf_id, ))
-        return cursor.fetchone()[0]
+        try:
+            leaf_id = self.__leaf_ids[key]
+            cursor.execute(SQL_SELECT_1ST_SLOT, (leaf_id, ))
+            return cursor.fetchone()[0]
+        except KeyError:
+            return None
 
 
     def commit(self):

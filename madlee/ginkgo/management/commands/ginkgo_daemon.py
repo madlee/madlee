@@ -87,7 +87,6 @@ def main_loop(logger, redis, style, reset_redis, save_gap, ginkgo_set):
             save_job = Thread(target=save_back, args=(logger, ginkgo_set, save_gap))
             save_job.start()
 
-
     pubsub = redis.pubsub()
     pubsub.psubscribe(GINKGO_SEPERATOR.join(('*', KEY_DAEMON, '*')))
     for item in pubsub.listen():
@@ -119,4 +118,5 @@ class Command(BaseCommand):
     def handle(self, logger, redis, style, reset_redis, save_gap, db, *args, **options):
         logger = logging.getLogger(logger)
         main_loop(logger, redis, style, reset_redis, save_gap, db)
+
 
