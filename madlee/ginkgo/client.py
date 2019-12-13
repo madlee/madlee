@@ -3,7 +3,7 @@ from uuid import uuid4
 from .const import GINKGO_SEPERATOR, KEY_DAEMON
 from .const import CMD_NEW_LEAF
 from .const import KEY_SCRIPTS, SHA_PUSH, SHA_NEW_LEAF, SHA_MISSING
-from .const import SHA_JOIN, SHA_JOIN_SUB
+from .const import SHA_JOIN, SHA_JOIN_SUB, SHA_GET_LAST, KEY_LEAVES
 from .const import CMD_ENSURE
 
 
@@ -15,10 +15,22 @@ class SyncClient:
         self.__dbname = dbname
         sha = redis.hgetall('%s|%s'%(dbname, KEY_SCRIPTS))
         sha = {k.decode():v.decode() for k, v in sha.items()}
-        self.__sha_push = sha[SHA_PUSH]
+        self.__sha_push     = sha[SHA_PUSH]
         self.__sha_new_leaf = sha[SHA_NEW_LEAF]
-        self.__sha_missing = sha[SHA_MISSING]
-        self.__sha_join = sha[SHA_JOIN]
+        self.__sha_missing  = sha[SHA_MISSING]
+        self.__sha_join     = sha[SHA_JOIN]
+        self.__sha_get_last = sha[SHA_GET_LAST]
+
+
+    @property
+    def all_leaves(self):
+        key = GINKGO_SEPERATOR.join((self.__dbname, KEY_LEAVES))
+        result = {
+            k.decode(): v.decode().split(GINKGO_SEPERATOR) 
+            for k, v in self.__redis.hgetall(key).items()
+        }
+        result = {k: ((v[0] if v[0] in 'Ymd' else int(v[0])), int(v[1])) for k, v in result.items()} 
+        return result
 
 
     def add_leaf(self, key, slot, size):
@@ -37,6 +49,14 @@ class SyncClient:
         )
 
 
+    def get_last(self, leaf, struct=None):
+        result = self.__redis.evalsha(self.__sha_get_last, 0, self.__dbname, leaf)
+        if struct:
+            result = struct.from_buffer_copy(result)
+        return result
+
+
+
     def ensure(self, start, finish, *keys):
         publish_key = GINKGO_SEPERATOR.join((
             self.__dbname, KEY_DAEMON, CMD_ENSURE
@@ -52,8 +72,8 @@ class SyncClient:
     def get(self, start, finish, *keys):
         start = start.timestamp()
         finish = finish.timestamp()
-        print (start, finish)
         return self.__redis.evalsha(self.__sha_join, 0, 
             self.__dbname, start, finish, *keys
         )
+
 
