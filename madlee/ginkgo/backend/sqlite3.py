@@ -92,7 +92,7 @@ class SqliteBackend(BasicBackend):
     def save_blocks(self, key, *blocks):
         cursor = self.__db.cursor()
         leaf_id = self.__leaf_ids[key]
-        blocks = self.prepare_blocks(key, blocks)
+        # blocks = self.prepare_blocks(key, blocks)
         blocks = [(leaf_id, row[0], row[1], row[2], row[3], row[4]) for row in blocks]
         cursor.executemany(SQL_SAVE_BLOCKS, blocks)
         self.__db.commit()

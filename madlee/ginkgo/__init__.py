@@ -84,8 +84,13 @@ class Ginkgo:
         return self.__sha
 
 
+    @property
+    def all_leaves(self):
+        return self.__backend.all_leaves
+
+
     def add_leaf(self, key, slot, size=0):
-        added = self.__redis.hget(GINKGO_SEPERATOR.join((self.__name, KEY_LEAVES)), key)
+        # added = self.__redis.hget(GINKGO_SEPERATOR.join((self.__name, KEY_LEAVES)), key)
         self.__backend.add_leaf(key, slot, size)
         return GinkgoLeaf(key, slot, size)
 
