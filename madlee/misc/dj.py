@@ -1,5 +1,6 @@
 from traceback import format_exc
 from django.http import JsonResponse, Http404, HttpResponseRedirect, HttpResponse
+from django.http import HttpResponseForbidden, HttpResponseNotFound
 from django.conf import settings
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
@@ -116,9 +117,19 @@ try:
         return salt, uri
 
     @login_required
-    def otp_bar_code(request, user=None, issuer=None):
-        if user == None:
+    def otp_bar_code(request, issuer=None):
+        username = request.GET.get('username', None)
+        if username == None or username == request.user.username:
             user = request.user
+        else:
+            if request.user.is_superuser:
+                try:
+                    user = User.objects.get(username=username)
+                except User.DoesNotExist:
+                    return HttpResponseNotFound()
+            else:
+                return HttpResponseForbidden()
+
         site_name = request.META['HTTP_HOST']
         secret, uri = otp_secret_and_uri(user, site_name, issuer)
         img = qrcode.make(uri)
