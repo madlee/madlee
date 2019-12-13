@@ -1,8 +1,8 @@
 from ..misc.lua import upload_scripts
 from .const import GINKGO_SEPERATOR, KEY_DAEMON, KEY_YEAR_TS, KEY_SCRIPTS
-from .const import KEY_LEAVES, SHA_NEW_LEAF, CMD_NEW_LEAF
+from .const import KEY_LEAVES, KEY_LAST_SLOT, SHA_NEW_LEAF, CMD_NEW_LEAF
 from .const import SHA_PUSH, SHA_MISSING, SHA_LOAD, SHA_JOIN, SHA_AUTO_LEAF
-from .const import SHA_ALL_SLOTS, SHA_NEWER_SLOTS
+from .const import SHA_ALL_SLOTS, SHA_NEWER_SLOTS, SHA_GET_LAST
 
 try:
     from conf.ginkgo import LUA_FUNCTION_SET 
@@ -35,13 +35,19 @@ else
     slot = auto_leaf(dbname, leaf)
 end
 
+local max_slot = '0'
 for i = 3, #ARGV do
     local data = ARGV[i]
     local ts = struct.unpack('d', string.sub(data, 1, 8))
     ts = ts_to_slot(key_ts, ts, slot)
+    if ts > max_slot then
+        max_slot = ts
+    end
     local key = dbname .. '%(sep)s' .. leaf .. '%(sep)s' .. ts
     redis.call('RPUSH', key, data)
 end
+local key = dbname .. '%(sep)s' .. '%(last_slot)s'
+redis.call('HSET', key, leaf, max_slot)
 
 ''' % {
     'FUNC_TS_TO_TIME': LUA_FUNCTION_SET['FUNC_TS_TO_TIME'],
@@ -50,6 +56,7 @@ end
     'leaves': KEY_LEAVES,
     'year_ts': KEY_YEAR_TS,
     'scripts': KEY_SCRIPTS,
+    'last_slot': KEY_LAST_SLOT,
     'auto_leaf': SHA_AUTO_LEAF
 }
 
@@ -319,18 +326,35 @@ return result
     'year_ts': KEY_YEAR_TS
 }
 
+
+LUA_GET_LAST = '''
+local dbname    = ARGV[1]
+local leaf      = ARGV[2]
+
+local key = dbname .. '%(sep)s' .. '%(last_slot)s'
+local slot = redis.call('HGET', key, leaf)
+if slot then
+    local key = dbname .. '%(sep)s' .. leaf .. '%(sep)s' .. slot
+    return redis.call('LINDEX', key, -1)
+else
+    return nil
+end
+
+''' % {
+    'sep': GINKGO_SEPERATOR,
+    'last_slot': KEY_LAST_SLOT
+}
+
 ALL_LUA_SCRIPTS = {
     SHA_PUSH:     LUA_PUSH_DATA,
     SHA_NEW_LEAF: LUA_NEW_LEAF,
     SHA_MISSING:  LUA_MISSING_SLOTS,
     SHA_LOAD:     LUA_LOAD_DATA,
     SHA_JOIN:     LUA_JOIN_DATA,
+    SHA_GET_LAST: LUA_GET_LAST,
 
     SHA_ALL_SLOTS:   LUA_LIST_ALL_SLOTS,
     SHA_NEWER_SLOTS: LUA_LIST_NEWER_SLOTS,
-
-    # 'LIST': LUA_LIST_SLOT,
-    # 'GET':  LUA_GET_DATA,
 }
 
 

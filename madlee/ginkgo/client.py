@@ -26,7 +26,7 @@ class SyncClient:
 
 
     def push(self, key, *data):
-        result = self.__redis.evalsha(self.__sha_push, 0, self.__dbname, key, *data)
+        return self.__redis.evalsha(self.__sha_push, 0, self.__dbname, key, *data)
 
 
     def missing_slots(self, key, start, finish):
