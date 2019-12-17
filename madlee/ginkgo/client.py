@@ -51,7 +51,7 @@ class SyncClient:
 
     def get_last(self, leaf, struct=None):
         result = self.__redis.evalsha(self.__sha_get_last, 0, self.__dbname, leaf)
-        if struct:
+        if struct and result:
             result = struct.from_buffer_copy(result)
         return result
 
