@@ -231,7 +231,7 @@ try:
 
 
     @json_response
-    def check_totp_secret(request):
+    def check_2fa_code(request):
         code = request.GET['code_2fa']
         totp_secret = request.session['totp_secret']
         auth = OtpAuth(totp_secret)
