@@ -1,9 +1,12 @@
+from base64 import b64encode
 from traceback import format_exc
 from django.http import JsonResponse, Http404, HttpResponseRedirect, HttpResponse
 from django.http import HttpResponseForbidden, HttpResponseNotFound
 from django.conf import settings
+from django.db import IntegrityError, transaction
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 
@@ -11,6 +14,24 @@ from .file import split_path
 from .io import load_json
 
 
+class ResponseJsonError(RuntimeError):
+    def __init__(self, message, data, code=200):
+        self.__message = message
+        self.__data = data
+        self.__code = code
+
+    @property
+    def result(self):
+        return {
+            'status': 'error',
+            'message': self.__message,
+            'data': self.__data,
+            'type': str(type(self))
+        }
+
+    @property
+    def code(self):
+        return self.__code
 
 
 def render_template(request, **argv):
@@ -39,6 +60,9 @@ def json_response(func):
                 'status': 'OK',
                 'data': data
             }
+        except ResponseJsonError as e:
+            code = e.code
+            result = e.result
         except KeyError as e:
             code = 500
             result = {
@@ -104,7 +128,7 @@ def async_run_forever(seconds, msg_template='%%s', exc_info=True):
 try:
     from io import BytesIO
     
-    from django.contrib.auth.models import User
+    
     from otpauth import OtpAuth
     import qrcode
 
@@ -158,23 +182,69 @@ try:
     @json_request
     @json_response
     def otp_login_action(request, username, password, otp_code):
-        try:
-            user = User.objects.get(username=username)
-        except User.DoesNotExist:
-            try:
-                user = User.objects.get(email=username)
-            except User.DoesNotExist:
-                raise RuntimeError('Invalid User')
-        
-        if not check_otp_code(user, otp_code):
-            raise RuntimeError('Invalid 2FA Code')
-
         user = authenticate(username=username, password=password)
         if user is None:
-            raise RuntimeError('Invalid Password')
+            raise ResponseJsonError(
+                'Invalid Username/Password',
+                {'password': 'Invalid', 'username': 'Invalid'}
+            )
 
+        if not check_otp_code(user, otp_code):
+            raise ResponseJsonError(
+                'Invalid 2FA Code',
+                {'otp_code': 'Invalid'}
+            )
         login(request, user)
 
+
+    @csrf_exempt
+    @ensure_csrf_cookie
+    @json_request
+    @json_response
+    def register_action(request, username, password, active=False, site_name=None, issuer=None, filetype='png'):
+        try:
+            user = User.objects.create_user(username=username, email=username, password=password, is_active=False)
+        except IntegrityError:
+            raise ResponseJsonError(
+                'User "%s" has existed.' % username,
+                {'username': 'Existed'}
+            )
+        
+        if not site_name:
+            site_name = request.META['HTTP_HOST']
+        if issuer == None:
+            issuer = site_name
+
+        secret, uri = otp_secret_and_uri(user, site_name, issuer)
+        img = qrcode.make(uri)
+        f = BytesIO()
+        img.save(f, filetype)
+        code = b64encode(f.getvalue()).decode()
+
+        request.session['totp_secret'] = secret
+
+        return {
+            'username': username,
+            'secret': secret,
+            'qrcode': code
+        }
+
+
+    @json_response
+    def check_totp_secret(request):
+        code = request.GET['code_2fa']
+        totp_secret = request.session['totp_secret']
+        auth = OtpAuth(totp_secret)
+        if auth.valid_totp(code):
+            del request.session['totp_secret']
+            return {
+                'success': "OK"
+            }
+        else:
+            raise ResponseJsonError(
+                "Invalid 2FA Code",
+                {'code_2fa': 'Invalid'}
+            )
 
 except ImportError:
     pass
