@@ -5,6 +5,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 from django_redis import get_redis_connection
 
+from ....misc.time import SECONDS_IN_A_DAY, DateTime, TimeDelta
 from ....misc.dj import run_forever
 from ... import Ginkgo
 from ...const import KEY_DAEMON, GINKGO_SEPERATOR, KEY_LEAVES
@@ -47,13 +48,22 @@ def ensure(logger, db, data):
 def save_blocks(logger, db, data):
     redis = db.redis
     dbname = db.name
+    seconds = int(data)
+    threshold = (DateTime.now() - TimeDelta(seconds=seconds)).strftime('%Y%m%d%H%M%S')
+    threshold = int(threshold)
     for leaf in db.all_leaves.keys():
         blocks = db.newer_blocks(leaf, db.get_last_slot(leaf))
         if blocks:
             for row in blocks:
                 print ('Saving', dbname, leaf, row[0])
             db.save_blocks(leaf, *blocks)
-
+        keys = redis.keys(GINKGO_SEPERATOR.join([db.name, leaf, '*']))
+        for k in keys:
+            k = k.decode()
+            t = int(k.split(GINKGO_SEPERATOR)[-1])
+            if t < threshold:
+                del redis[k]
+                logger.info('Delete %s', k)
 
 
 
@@ -71,7 +81,7 @@ def save_back(logger, redis, save_gap, ginkgo_set):
         sleep(save_gap)
         for dbname in ginkgo_set:
             cmd = GINKGO_SEPERATOR.join((dbname, KEY_DAEMON, CMD_SAVE))
-            redis.publish(cmd, '*')
+            redis.publish(cmd, str(SECONDS_IN_A_DAY))
 
 
 
