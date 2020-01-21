@@ -7,6 +7,8 @@ from datetime import date as Date
 from bisect import bisect, bisect_left, bisect_right
 from time import sleep
 
+from .str import all_digits
+
 ONE_SECOND  = TimeDelta(seconds=1)
 ONE_MINUTE  = TimeDelta(seconds=60)
 ONE_HOUR    = TimeDelta(seconds=3600)
