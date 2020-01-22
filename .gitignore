@@ -107,4 +107,5 @@ venv.bak/
 logs/
 cache/
 GINKGO/
+madlee.db
 

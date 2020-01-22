@@ -1,15 +1,18 @@
 LUA_BISECT = '''
 local bisect_left = function(key, value, start, finish)
     if not start then
-        start = 1
+        start = 0
     end
     if not finish then
-        finish = redis.call('LLEN', key)+1
+        finish = redis.call('LLEN', key)
     end
 
     while start < finish do
         local mid = (start+finish)/2
         mid = mid - mid%1
+        if mid >= finish then
+            return finish
+        end
         local data = redis.call('LINDEX', key, mid)
         local mid_value = struct.unpack('d', string.sub(data, 1, 8))
         if mid_value < value then
@@ -24,15 +27,18 @@ end
 
 local bisect_right = function(key, value, start, finish)
     if not start then
-        start = 1
+        start = 0
     end
     if not finish then
-        finish = redis.call('LLEN', key)+1
+        finish = redis.call('LLEN', key)
     end
 
     while start < finish do
         local mid = (start+finish)/2
         mid = mid - mid%1
+        if mid >= finish then
+            return finish
+        end
         local data = redis.call('LINDEX', key, mid)
         local mid_value = struct.unpack('d', string.sub(data, 1, 8))
         if value < mid_value then
