@@ -77,3 +77,10 @@ class SyncClient:
         )
 
 
+class LocalGinkgoClient:
+    def __init__(self, name, leafs, slot_func):
+        from .backend.bsddb import BerkelyDBBackend
+        self.__backend = BerkelyDBBackend(name, leafs, slot_func)
+        
+
+    
