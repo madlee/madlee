@@ -16,7 +16,7 @@ ONE_DAY     = TimeDelta(1)
 
 SECONDS_IN_AN_HOUR = 60 * 60
 SECONDS_IN_A_DAY   = 24 * SECONDS_IN_AN_HOUR 
-
+SECONDS_IN_A_YEAR  = SECONDS_IN_A_DAY * 365
 
 def today():
     return to_date(Date.today())
