@@ -252,6 +252,22 @@ except ImportError:
 
 
 
+@csrf_exempt
+@ensure_csrf_cookie
+@json_request
+@json_response
+def login_action(request, username, password):
+    user = authenticate(username=username, password=password)
+    if user is None:
+        raise ResponseJsonError(
+            'Invalid Username/Password',
+            {'password': 'Invalid', 'username': 'Invalid'}
+        )
+    login(request, user)
+
+
+
+
 def logout_action(request):
     logout(request)
     return redirect('login.html')
