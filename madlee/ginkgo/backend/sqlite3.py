@@ -42,8 +42,8 @@ WHERE name = ?
 '''
 
 SQL_NEW_BRANCH = '''INSERT INTO ginkgo_branch
-(name, start, finish, leaves) 
-VALUES (?, 99999999999999, 0, 0)
+(name, start, finish) 
+VALUES (?, 99999999999999, 0)
 '''
 
 
@@ -74,23 +74,25 @@ WHERE start >= ? AND start <= ? OR
 
 SQL_UPSERT_LEAVES = '''
 INSERT INTO ginkgo_leaves 
-    (branch, slot, data)
-    VALUES (?, ?, ?)
-    ON CONFLICT (branch, slot) 
-    DO UPDATE SET data=?
+(branch, slot, data)
+VALUES (?, ?, ?)
+ON CONFLICT (branch, slot) 
+DO UPDATE SET data=?
 '''
 
 SQL_UPDATE_BRANCH = '''
 UPDATE ginkgo_branch
-    SET start = MIN(start, ?), finish = MAX(finish, ?)
-    WHERE id = ?
+SET start = MIN(start, ?), finish = MAX(finish, ?)
+WHERE id = ?
 '''
 
 class SqliteBackend(BasicBackend):
     '''Save in Sqlite DB'''
 
     def __init__(self, name, readonly=True):
-        self.__db = db = connect(name+'.sql')
+        if not readonly:
+            self.create(name)
+        self.__db = db = connect(name+'.sqlite3')
         self.__readonly = readonly
 
 
@@ -152,7 +154,7 @@ class SqliteBackend(BasicBackend):
             cr.execute(SQL_SELECT_BRANCHS_1, (ts1, ts1))
         return [row[0] for row in cr.fetchall()]
 
-
+    @property
     def readonly(self):
         '''Return True if it is readonly'''
         return self.__readonly
@@ -161,7 +163,7 @@ class SqliteBackend(BasicBackend):
     @classmethod
     def create(cls, name):
         '''Initialize the database'''
-        db = connect(name+'.sql')
+        db = connect(name+'.sqlite3')
         cr = db.cursor()
         execute_sqls(SQL_PREPARE, cr)
         db.commit()

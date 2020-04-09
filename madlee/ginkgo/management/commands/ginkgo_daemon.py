@@ -13,7 +13,7 @@ from ...const import GINKGO_SEPERATOR, KEY_DAEMON
 
 
 
-@run_forever(5)
+# @run_forever(5)
 def main_loop(logger, redis, style, reset_redis, save_gap, ginkgo_set):
     redis = get_redis_connection(redis)
     ginkgo_set = [
@@ -28,15 +28,15 @@ def main_loop(logger, redis, style, reset_redis, save_gap, ginkgo_set):
             )
             ginkgo.reset_redis(scripts)
 
-        while True:
-            next_save = (now() // save_gap + 1) * save_gap
-            delta = next_save - now()
-            if delta > 0:
-                sleep(delta)
+    while True:
+        next_save = (now() // save_gap + 1) * save_gap
+        delta = next_save - now()
+        if delta > 0:
+            sleep(delta)
 
-            for row in ginkgo_set.values():
-                dirties = row.save_dirty()
-                logger.info('[%s] Save dirty slots %s.', row.name, ', '.join(dirties))
+        for row in ginkgo_set:
+            dirties = row.save_dirty()
+            logger.info('[%s] Save dirty slots %s.', row.name, ', '.join(dirties))
 
 
 class Command(BaseCommand):

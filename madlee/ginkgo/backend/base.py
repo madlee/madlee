@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod, abstractclassmethod
+from abc import ABC, abstractmethod, abstractclassmethod, abstractproperty
 from struct import unpack
 
 from ..base import to_slot, list_slot
@@ -15,7 +15,7 @@ class BasicBackend(ABC):
         ''' Get data between [slot1, slot2]'''
 
 
-    @abstractmehthod
+    @abstractmethod
     def range(self, branch):
         '''Return start/end pair of branch'''
 

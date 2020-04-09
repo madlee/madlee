@@ -1,10 +1,8 @@
 from uuid import uuid4
 
-from .const import GINKGO_SEPERATOR, KEY_DAEMON
-from .const import CMD_NEW_LEAF
-from .const import KEY_SCRIPTS, SHA_PUSH, SHA_NEW_LEAF, SHA_MISSING
-from .const import SHA_JOIN, SHA_JOIN_SUB, SHA_GET_LAST, KEY_LEAVES
-from .const import CMD_ENSURE
+from .const import GINKGO_SEPERATOR, KEY_DAEMON, KEY_SCRIPTS
+from .const import SHA_PUSH, SHA_NEW_LEAF, SHA_MISSING
+from .const import SHA_JOIN, SHA_JOIN_SUB, SHA_GET_LAST
 
 
 
@@ -17,9 +15,8 @@ class SyncClient:
             GINKGO_SEPERATOR.join([dbname, KEY_SCRIPTS]), 
             SHA_PUSH, SHA_GET_LAST
         )
-        sha = {k.decode():v.decode() for k, v in sha.items()}
-        self.__sha_push     = sha[SHA_PUSH]
-        self.__sha_get_last = sha[SHA_GET_LAST]
+        self.__sha_push     = sha[0]
+        self.__sha_get_last = sha[1]
 
 
     def push(self, key, *data):

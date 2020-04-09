@@ -1,8 +1,11 @@
 from struct import pack, unpack
+
 from madlee.misc.lua import upload_scripts
+from madlee.misc.time import DateTime
 from .backend import connect_backend
+from .const import KEY_YEAR_TS, DEFAULT_YEAR_RANGE
 from .const import GINKGO_SEPERATOR, KEY_SCRIPTS
-from .const import SHA_CLEAN_UP, SHA_RESET_DIRTY
+from .const import SHA_CLEAN, SHA_RESET_DIRTY
 from .const import SHA_BRANCH_SIZE
 
 
@@ -22,10 +25,17 @@ class GinkgoDaemon:
 
 
     def reset_redis(self, scripts):
-        clean_up = scripts[SHA_CLEAN_UP]
+        redis = self.__redis
+        clean_up = scripts[SHA_CLEAN]
         redis.eval(clean_up, 0, self.name) # Script Clean up
+
+        year_range = {year: DateTime(year, 1, 1).timestamp()
+            for year in range(DEFAULT_YEAR_RANGE[0], DEFAULT_YEAR_RANGE[1]+1)
+        }
+        redis.zadd(GINKGO_SEPERATOR.join((self.__name, KEY_YEAR_TS)), year_range)
+
         key = GINKGO_SEPERATOR.join([self.name, KEY_SCRIPTS])
-        self.__sha = upload_scripts(self.redis, key, **scripts)
+        self.__sha = upload_scripts(redis, key, **scripts)
 
 
     @property
@@ -86,7 +96,7 @@ class GinkgoDaemon:
                     blocks[branch] = {slot: block}
 
             for branch, row in blocks.items():
-                size = self.branch_size(size)
+                size = self.branch_size(branch)
                 row = [(slot, self.pack(v, size)) for slot, v in row.items()]
                 self.__backend.save(branch, *row)
         else:

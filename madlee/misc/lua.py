@@ -69,13 +69,13 @@ end
 
 
 local ts_to_slot = function(key_year_ts, ts, slot)
-    if ts >= 20000101000000 then
+    if ts >= 19000101000000 then
         ts = to_string(ts)
         if slot == 'Y' then
             return string.sub(ts, 1, 4)
-        elif slot == 'm' then
+        elseif slot == 'm' then
             return string.sub(ts, 1, 6)
-        elif slot == 'd' then
+        elseif slot == 'd' then
             return string.sub(ts, 1, 8)
         else
             local day = string.sub(ts, 1, 8)
