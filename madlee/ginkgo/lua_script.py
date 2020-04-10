@@ -2,7 +2,7 @@ from ..misc.lua import upload_scripts
 from .const import GINKGO_SEPERATOR, KEY_YEAR_TS
 from .const import KEY_DIRTY, KEY_LAST_SLOT
 from .const import SHA_CLEAN, SHA_PUSH, SHA_RESET_DIRTY
-from .const import SHA_BRANCH_SIZE
+from .const import SHA_BRANCH_SIZE, SHA_GET_LAST
 
 
 LUA_CLEAN_UP = '''
@@ -68,7 +68,12 @@ local dbname = ARGV[1]
 local branch = ARGV[2]
 local key = dbname .. '%(sep)s' .. '%(KEY_LAST_SLOT)s'
 local slot = redis.call('HGET', key, branch)
-return redis.call('LINDEX', slot, -1)
+if slot then 
+    key = dbname .. '%(sep)s' .. branch .. '%(sep)s' .. slot
+    return redis.call('LINDEX', key, -1)
+else 
+    return nil
+end
 '''
 
 
@@ -77,6 +82,7 @@ ALL_LUA_SCRIPTS = {
     SHA_PUSH:           LUA_PUSH_DATA,
     SHA_RESET_DIRTY:    LUA_RESET_DIRTY,
     SHA_BRANCH_SIZE:    LUA_BRANCH_SIZE,
+    SHA_GET_LAST:       LUA_GET_LAST
 }
 
 
