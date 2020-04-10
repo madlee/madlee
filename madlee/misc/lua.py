@@ -1,15 +1,18 @@
 LUA_BISECT = '''
 local bisect_left = function(key, value, start, finish)
     if not start then
-        start = 1
+        start = 0
     end
     if not finish then
-        finish = redis.call('LLEN', key)+1
+        finish = redis.call('LLEN', key)
     end
 
     while start < finish do
         local mid = (start+finish)/2
         mid = mid - mid%1
+        if mid >= finish then
+            return finish
+        end
         local data = redis.call('LINDEX', key, mid)
         local mid_value = struct.unpack('d', string.sub(data, 1, 8))
         if mid_value < value then
@@ -24,15 +27,18 @@ end
 
 local bisect_right = function(key, value, start, finish)
     if not start then
-        start = 1
+        start = 0
     end
     if not finish then
-        finish = redis.call('LLEN', key)+1
+        finish = redis.call('LLEN', key)
     end
 
     while start < finish do
         local mid = (start+finish)/2
         mid = mid - mid%1
+        if mid >= finish then
+            return finish
+        end
         local data = redis.call('LINDEX', key, mid)
         local mid_value = struct.unpack('d', string.sub(data, 1, 8))
         if value < mid_value then
@@ -63,56 +69,83 @@ end
 
 
 local ts_to_slot = function(key_year_ts, ts, slot)
-    local year_ts = redis.call('ZRANGEBYSCORE', key_year_ts, ts-366*SECONDS_IN_A_DAY, ts, 'WITHSCORES')
-    if slot == 'Y' then
-        return year_ts[#year_ts-1]
-    end 
+    if ts >= 19000101000000 then
+        ts = to_string(ts)
+        if slot == 'Y' then
+            return string.sub(ts, 1, 4)
+        elseif slot == 'm' then
+            return string.sub(ts, 1, 6)
+        elseif slot == 'd' then
+            return string.sub(ts, 1, 8)
+        else
+            local day = string.sub(ts, 1, 8)
+            local hours = to_number(string.sub(ts, 9, 10))
+            local minutes  = to_number(string.sub(ts, 11, 12))
+            local seconds = to_number(string.sub(ts, 13, 14))
+            seconds = (hours*60+minutes)*60+seconds
+            seconds = seconds / slot
+            seconds = seconds - seconds % 1
+            seconds = seconds * slot
+            hours = seconds / 3600
+            hours = hours - hours % 1
+            seconds = seconds - hours * 3600
+            minutes = seconds / 60
+            minutes = minutes - minutes % 1
+            seconds = seconds - minutes * 60
+            return day .. string.format('%02d%02d%02d', hours, minutes, seconds)
+        end 
+    else
+        local year_ts = redis.call('ZRANGEBYSCORE', key_year_ts, ts-366*SECONDS_IN_A_DAY, ts, 'WITHSCORES')
+        if slot == 'Y' then
+            return year_ts[#year_ts-1]
+        end 
 
-    local seconds_remains = ts - tonumber(year_ts[#year_ts])
-    local year = tonumber(year_ts[#year_ts-1])
-    local days = seconds_remains / SECONDS_IN_A_DAY
-    local month, day
-    local dim = days_in_month(year)
-    for i = 1, #dim do
-        local next_seconds_remains = seconds_remains - dim[i]*SECONDS_IN_A_DAY
-        if next_seconds_remains < 0 then
-            month = i
-            break
+        local seconds_remains = ts - tonumber(year_ts[#year_ts])
+        local year = tonumber(year_ts[#year_ts-1])
+        local days = seconds_remains / SECONDS_IN_A_DAY
+        local month, day
+        local dim = days_in_month(year)
+        for i = 1, #dim do
+            local next_seconds_remains = seconds_remains - dim[i]*SECONDS_IN_A_DAY
+            if next_seconds_remains < 0 then
+                month = i
+                break
+            end
+            seconds_remains = next_seconds_remains
         end
-        seconds_remains = next_seconds_remains
-    end
-    
-    month = string.format('%04d%02d', year, month)
-    if slot == 'm' then
-        return month
-    end
+        
+        month = string.format('%04d%02d', year, month)
+        if slot == 'm' then
+            return month
+        end
 
-    local day = seconds_remains / SECONDS_IN_A_DAY
-    day = day - day % 1
-    seconds_remains = seconds_remains - day * SECONDS_IN_A_DAY
-    day = day + 1
-    day = month .. string.format('%02d', day)
-    if slot == 'd' then
-        return day
-    end
-    if slot then 
-        seconds_remains = seconds_remains / slot
-        seconds_remains = (seconds_remains - seconds_remains % 1) * slot
-    end
+        local day = seconds_remains / SECONDS_IN_A_DAY
+        day = day - day % 1
+        seconds_remains = seconds_remains - day * SECONDS_IN_A_DAY
+        day = day + 1
+        day = month .. string.format('%02d', day)
+        if slot == 'd' then
+            return day
+        end
+        if slot then 
+            seconds_remains = seconds_remains / slot
+            seconds_remains = (seconds_remains - seconds_remains % 1) * slot
+        end
 
-    local hour = seconds_remains / SECONDS_IN_AN_HOUR
-    hour = hour - hour % 1
-    seconds_remains = seconds_remains - hour * SECONDS_IN_AN_HOUR
-    local minute = seconds_remains / 60
-    minute = minute - minute % 1
-    local second = seconds_remains - minute*60
-    local result
-    if slot then 
-        result = string.format('%02d%02d%02d', hour, minute, second)
-    else 
-        result = string.format('%02d%02d%09.6f', hour, minute, second)
+        local hour = seconds_remains / SECONDS_IN_AN_HOUR
+        hour = hour - hour % 1
+        seconds_remains = seconds_remains - hour * SECONDS_IN_AN_HOUR
+        local minute = seconds_remains / 60
+        minute = minute - minute % 1
+        local second = seconds_remains - minute*60
+        local result
+        if slot then 
+            result = string.format('%02d%02d%02d', hour, minute, second)
+        else 
+            result = string.format('%02d%02d%09.6f', hour, minute, second)
+        end
+        return day .. result
     end
-    return day .. result
 end 
 
 

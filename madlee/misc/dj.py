@@ -5,6 +5,7 @@ from django.http import HttpResponseForbidden, HttpResponseNotFound
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.shortcuts import render, redirect
+from django.forms import model_to_dict
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
@@ -250,6 +251,22 @@ try:
 
 except ImportError:
     pass
+
+
+
+
+@csrf_exempt
+@ensure_csrf_cookie
+@json_request
+@json_response
+def login_action(request, username, password):
+    user = authenticate(username=username, password=password)
+    if user is None:
+        raise ResponseJsonError(
+            'Invalid Username/Password',
+            {'password': 'Invalid', 'username': 'Invalid'}
+        )
+    login(request, user)
 
 
 

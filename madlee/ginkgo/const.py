@@ -1,11 +1,16 @@
+DEFAULT_YEAR_RANGE = 1977, 2100
 
 GINKGO_SEPERATOR = '|'
 
 KEY_DAEMON      = 'GINKGO-DAEMON'
 KEY_SCRIPTS     = 'GINKGO-SCRIPTS'
 KEY_YEAR_TS     = 'GINKGO-YEAR-TS'
-KEY_LEAVES      = 'GINKGO-LEAVES'
+KEY_DIRTY       = 'GINKGO-DIRTY'
 KEY_LAST_SLOT   = 'GINKGO-LAST-SLOT'
+
+EXPIRE_SECONDS_FOR_NEW_DATA = 3600
+EXPIRE_SECONDS_FOR_OLD_DATA = 300
+
 
 CMD_NEW_LEAF = 'NEW-LEAF'
 CMD_ENSURE   = 'ENSURE'
@@ -14,9 +19,13 @@ CMD_SAVE     = 'SAVE'
 MSG_NEW_SLOT = 'NEW-SLOT'
 MSG_ENSURED  = 'ENSURED'
 
+SHA_CLEAN       = 'CLEAN'       # Clear all keys like 'DBNAME|*'
+SHA_PUSH        = 'PUSH'        # Push new data into redis and update dirty flag
+SHA_RESET_DIRTY = 'RESET-DIRTY' # Load and reset dirty flag
+SHA_BRANCH_SIZE = 'BRANCH-SIZE' # Return the leaf-size of a branch
+SHA_GET_LAST    = 'GET-LAST'    # Get Last record of a branch
 
 
-SHA_PUSH        = 'PUSH'
 SHA_NEW_LEAF    = CMD_NEW_LEAF
 SHA_MISSING     = 'MISS'
 SHA_LOAD        = 'LOAD'
@@ -24,7 +33,11 @@ SHA_JOIN        = 'JOIN'
 SHA_JOIN_SUB    = 'JOIN-SUB'
 SHA_AUTO_LEAF   = 'AUTO-LEAF'
 SHA_GET_SLOT    = 'GET-SLOT'
-SHA_GET_LAST    = 'GET-LAST'
+
 SHA_ALL_SLOTS   = 'ALL-SLOTS'
 SHA_NEWER_SLOTS = 'NEWER-SLOTS'
+
+GINKGO_FOLDER   = 'Ginkgo'
+
+BSDDB_MAX_OPEN_DB = 256
 
