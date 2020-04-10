@@ -56,6 +56,8 @@ def json_response(func):
         code = 200
         try:
             data = func(request, *args, **kwargs)
+            if isinstance(data, HttpResponse):
+                return data
             result = {
                 'status': 'OK',
                 'data': data
