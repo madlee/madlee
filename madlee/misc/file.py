@@ -35,3 +35,5 @@ def writable_file(filename):
 ########################################################################
 
 
+def filter_file_for_list(request, path, real_path, name):
+    return name[0] not in  '.$~'
