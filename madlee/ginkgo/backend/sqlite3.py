@@ -1,125 +1,170 @@
 from sqlite3 import connect
+from functools import lru_cache
 
 from ...misc.file import join_path
 from ...misc.db import execute_sqls
 from .base import BasicBackend
 
 
-SQL_PREPARE = '''CREATE TABLE IF NOT EXISTS ginkgo_leaf (
+SQL_PREPARE = '''CREATE TABLE IF NOT EXISTS ginkgo_branch (
     id INTEGER  PRIMARY KEY AUTOINCREMENT,
-    name CHAR(50) UNIQUE,
-    slot CHAR(8),
-    size INTEGER
+    name CHAR(200) UNIQUE,
+    start INTEGER,
+    finish INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS ginkgo_blocks (
-    id INTEGER  PRIMARY KEY AUTOINCREMENT,
-    leaf INTEGER REFERENCES ginkgo_leaf(id),
-    slot INTEGER, size INTEGER, 
-    start DOUBLE, finish DOUBLE,
-    data BINARY,
-    UNIQUE (leaf, slot)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ginkgo_branch_name 
+ON ginkgo_branch (name);
+
+CREATE INDEX IF NOT EXISTS idx_ginkgo_branch_start 
+ON ginkgo_branch (start);
+
+CREATE INDEX IF NOT EXISTS idx_ginkgo_branch_finish 
+ON ginkgo_branch (finish);
+
+CREATE TABLE IF NOT EXISTS ginkgo_leaves (
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    branch INTEGER REFERENCES ginkgo_branch(id),
+    slot   INTEGER,
+    data   BINARY,
+    UNIQUE (branch, slot)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ginkgo_index 
-ON ginkgo_blocks (leaf, slot);
-
-
-SELECT name, id, slot, size
-FROM ginkgo_leaf;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ginkgo_index 
+ON ginkgo_leaves (branch, slot);
 
 '''
 
-SQL_ADD_LEAF = '''INSERT INTO ginkgo_leaf
-( name, slot, size ) VALUES (?, ?, ? )
+SQL_SELECT_BRANCH_ID = '''
+SELECT id 
+FROM ginkgo_branch
+WHERE name = ?
 '''
 
-SQL_SELECT_BLOCKS = '''SELECT data
-FROM ginkgo_blocks
-WHERE leaf = ? AND ? <= slot AND slot <= ?
+SQL_NEW_BRANCH = '''INSERT INTO ginkgo_branch
+(name, start, finish) 
+VALUES (?, 99999999999999, 0)
 '''
 
-SQL_SAVE_BLOCKS = '''INSERT OR REPLACE INTO ginkgo_blocks
-(leaf, slot, size, start, finish, data) VALUES (?, ?, ?, ?, ?, ?)
+
+SQL_SELECT_LEAVES = '''SELECT slot, data 
+FROM ginkgo_leaves
+WHERE branch = ? AND slot IN (%s)
+ORDER BY slot
 '''
 
-SQL_SELECT_1ST_SLOT = '''SELECT MIN(slot) 
-FROM ginkgo_blocks
-WHERE leaf = ?
+SQL_SELECT_RANGE = '''SELECT start, finish
+FROM ginkgo_branch
+WHERE id = ? 
 '''
 
-SQL_SELECT_LAST_SLOT = '''SELECT MAX(slot) 
-FROM ginkgo_blocks
-WHERE leaf = ?
+SQL_SELECT_BRANCHS_1 = '''SELECT name
+FROM ginkgo_branch
+WHERE start <= ? AND finish >= ?
 '''
 
+
+SQL_SELECT_BRANCHS_2 = '''SELECT name
+FROM ginkgo_branch
+WHERE start >= ? AND start <= ? OR
+   finish >= ? AND finish <= ? OR
+   start >= ? AND finish <= ? OR 
+   start <= ? AND finish >= ? 
+'''
+
+SQL_UPSERT_LEAVES = '''
+INSERT INTO ginkgo_leaves 
+(branch, slot, data)
+VALUES (?, ?, ?)
+ON CONFLICT (branch, slot) 
+DO UPDATE SET data=?
+'''
+
+SQL_UPDATE_BRANCH = '''
+UPDATE ginkgo_branch
+SET start = MIN(start, ?), finish = MAX(finish, ?)
+WHERE id = ?
+'''
 
 class SqliteBackend(BasicBackend):
     '''Save in Sqlite DB'''
 
     def __init__(self, name, readonly=True):
-        self.__db = db = connect(join_path('GINKGO', name))
-        cursor = db.cursor()
-        execute_sqls(SQL_PREPARE, cursor)
-        leaves = list(cursor)
-        self.__leaves = {
-            row[0]: ((int(row[2]) if row[2] not in 'Ymd' else row[2]), row[3]) for row in leaves
-        }
-        self.__leaf_ids = {
-            row[0]: row[1] for row in leaves
-        }
+        if not readonly:
+            self.create(name)
+        self.__db = db = connect(name+'.sqlite3')
+        self.__readonly = readonly
 
+
+    def save(self, branch, *leafs):
+        '''Save a set of leafs into branch'''
+        assert not self.readonly
+        bid = self.branch_id(branch)
+        start = min([row[0] for row in leafs])
+        finish = max([row[0] for row in leafs])
+        parms = [ 
+            (bid, slot, data, data)
+            for slot, data in leafs
+        ]
+        cr = self.__db.cursor()
+        cr.executemany(SQL_UPSERT_LEAVES, parms)
+        cr.execute(SQL_UPDATE_BRANCH, (start, finish, bid, ))
+        self.__db.commit()
+
+
+    @lru_cache(50)
+    def branch_id(self, branch):
+        cr = self.__db.cursor()
+        cr.execute(SQL_SELECT_BRANCH_ID, (branch, ))
+        row = cr.fetchone()
+        if row:
+            return row[0]
+        elif self.readonly:
+            return None
+        else:
+            cr.execute(SQL_NEW_BRANCH, (branch, ))
+            self.__db.commit()
+            return cr.lastrowid
+
+
+    def load(self, branch, *slots):
+        ''' Get data between [slot1, slot2]'''
+        bid = self.branch_id(branch)
+        cr = self.__db.cursor()
+        sql = SQL_SELECT_LEAVES % ', '.join(['?'] * len(slots))
+        parms = (bid, ) + tuple(slots)
+        cr.execute(sql, parms)
+        return dict(cr.fetchall())
+
+
+    def range(self, branch):
+        '''Return start/end pair of branch'''
+        cr = self.__db.cursor()
+        bid = self.branch_id(branch)
+        cr.execute(SQL_SELECT_RANGE, (bid, ))
+        return cr.fetchone()
+
+
+    def branches(self, ts1, ts2=None):
+        '''Return branch names between ts1 and ts2'''
+        cr = self.__db.cursor()
+        if ts2:
+            cr.execute(SQL_SELECT_BRANCHS_2, (ts1, ts2, ts1, ts2, ts1, ts2, ts1, ts2))
+        else:
+            cr.execute(SQL_SELECT_BRANCHS_1, (ts1, ts1))
+        return [row[0] for row in cr.fetchall()]
 
     @property
-    def all_leaves(self):
-        return self.__leaves
-
-    def add_leaf(self, key, slot, size):
-        cursor = self.__db.cursor()
-        cursor.execute(SQL_ADD_LEAF, (key, slot, size))
-        self.__leaves[key] = (slot, size)
-        self.__leaf_ids[key] = cursor.lastrowid
-        self.__db.commit()
+    def readonly(self):
+        '''Return True if it is readonly'''
+        return self.__readonly
 
 
-    def load_blocks(self, key, slot1, slot2):
-        cursor = self.__db.cursor()
-        leaf_id = self.__leaf_ids[key]
-        cursor.execute(SQL_SELECT_BLOCKS, (leaf_id, slot1, slot2))
-        return [row[0] for row in cursor]
-
-
-    def save_blocks(self, key, *blocks):
-        cursor = self.__db.cursor()
-        leaf_id = self.__leaf_ids[key]
-        # blocks = self.prepare_blocks(key, blocks)
-        blocks = [(leaf_id, row[0], row[1], row[2], row[3], row[4]) for row in blocks]
-        cursor.executemany(SQL_SAVE_BLOCKS, blocks)
-        self.__db.commit()
-
-
-    def get_last_slot(self, key):
-        '''Get last slot'''
-        try:
-            cursor = self.__db.cursor()
-            leaf_id = self.__leaf_ids[key]
-            cursor.execute(SQL_SELECT_LAST_SLOT, (leaf_id, ))
-            return cursor.fetchone()[0]
-        except KeyError:
-            return None
-
-    
-    def get_1st_slot(self, key):
-        '''Get the 1st slot'''
-        cursor = self.__db.cursor()
-        try:
-            leaf_id = self.__leaf_ids[key]
-            cursor.execute(SQL_SELECT_1ST_SLOT, (leaf_id, ))
-            return cursor.fetchone()[0]
-        except KeyError:
-            return None
-
-
-    def commit(self):
-        self.__db.commit()
+    @classmethod
+    def create(cls, name):
+        '''Initialize the database'''
+        db = connect(name+'.sqlite3')
+        cr = db.cursor()
+        execute_sqls(SQL_PREPARE, cr)
+        db.commit()
 

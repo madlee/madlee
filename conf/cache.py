@@ -13,7 +13,7 @@ CACHES = {
     },
     "ginkgo": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "unix://@/tmp/ginkgo.sock"
+        "LOCATION": "redis://127.0.0.1:36379/0",
     },
 }
 
