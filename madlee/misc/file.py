@@ -2,7 +2,7 @@
 ########################################################################
 ### Folder and file operations
 from os.path import split as split_path, join as join_path, normpath as normalize_path, abspath as abs_path
-from os.path import isdir as is_dir, isfile as is_file
+from os.path import isdir as is_dir, isfile as is_file, dirname
 from os import makedirs as make_dirs, listdir as list_dir
 from os import remove as remove_file
 from os import access as access_file_permission
