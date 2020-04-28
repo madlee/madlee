@@ -6,11 +6,13 @@
 #include <unordered_map>
 #include <hiredis/hiredis.h>
 
+#include "misc.h"
+
 #ifndef _MADLEE_REDIS_H_
 #define _MADLEE_REDIS_H_
 
-extern "C"
-{
+namespace madlee {
+
     enum
     {
         UNIX_SOCKET_PORT = uint32_t(-1)
@@ -23,10 +25,8 @@ extern "C"
         uint32_t db;
         const char *password;
     };
-}
 
-namespace madlee
-{
+
     class RedisError
         : public std::exception
     {

@@ -1,6 +1,6 @@
 #include "redis.h"
 
-namespace T {
+namespace madlee {
 
     RedisError::RedisError(int code, const char message[])
         : _code(code)
