@@ -67,7 +67,7 @@ namespace madlee {
             return std::string(_p->str, _p->len);
         }
 
-        std::vector<String> get_array() const
+        std::vector<String> get_array() const 
         {
             std::vector<String> result;
             if (_p->type == REDIS_REPLY_ARRAY)
@@ -80,6 +80,21 @@ namespace madlee {
                 }
             }
             return result;
+        }
+
+        size_t get_array(String output[], size_t n) const {
+            size_t result = 0;
+            if (_p->type == REDIS_REPLY_ARRAY)
+            {
+                result = std::min(n, _p->elements);
+                for (size_t i = 0; i < result; ++i)
+                {
+                    redisReply *sub = _p->element[i];
+                    output[i] = String(sub->str, sub->len);
+                }
+            }
+            return result;
+
         }
 
         template <typename POD>
@@ -247,6 +262,27 @@ namespace madlee {
             void *reply = (redisReply *)redisCommand(_connection, "EVALSHA %s 1 %s %s %s", sha, key, vv1, vv2);
             return parse_reply(reply);
         }
+
+        std::unique_ptr<RedisReply> evalsha(const char sha[], size_t n_keys, const std::vector<String>& parms) {
+            return evalsha(sha, n_keys, &parms[0], parms.size());
+        }
+
+        std::unique_ptr<RedisReply> evalsha(const char sha[], size_t n_keys, const String parms[], size_t n) {
+            std::vector<const char*> argv(n+3);
+            std::vector<size_t> argvlen(n+3);
+            argv[0] = "EVALSHA"; argvlen[0] = strlen(argv[0]);
+            argv[1] = sha; argvlen[0] = strlen(sha);
+            char buffer[64];
+            argv[2] = buffer; argvlen[2] = sprintf(buffer, "%lu", n_keys);
+            for (size_t i = 0; i < n; ++i) {
+                argv[i+3] = parms[i].c_str();
+                argvlen[i+3] = parms[i].size();
+            }
+            void* reply = redisCommandArgv(_connection, argv.size(), &argv[0], &argvlen[0]);
+            return parse_reply(reply);
+        }
+
+
 
         template <typename POD>
         size_t lrange(const char *key, int start, int end, POD output[])
