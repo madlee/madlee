@@ -49,7 +49,14 @@ var madlee_post = function(url, self, fields, handle) {
             parms[k] = val
         }
         else {
-            parms[k] = self[k]
+            var x = self[k]
+            var t = typeof(x) 
+            if (t === 'function') {
+                parms[k] = x()
+            }
+            else {
+                parms[k] = self[k]
+            }
         }
     }
     axios.post(url, parms).then(function(response) {
@@ -75,7 +82,6 @@ var madlee_post = function(url, self, fields, handle) {
 
 
 PATTERN_EMAIL =  /^([A-Za-z0-9_\-\.])+\@([A-Za-z0-9_\-\.])+\.([A-Za-z]{2,4})$/;
-
 
 
 var file_icon = function(filename) {
