@@ -28,3 +28,20 @@ class SyncClient:
         if struct and result:
             result = struct.from_buffer_copy(result)
         return result
+
+
+class AsyncClient:
+    def __init__(self, redis, dbname):
+        self.__redis = redis
+        self.__dbname = dbname
+
+
+    async def push(self, key, *data):
+        return await self.__redis.evalsha(self.__sha_push, 0, self.__dbname, key, *data)
+
+
+    async def get_last(self, branch, struct=None):
+        result = await self.__redis.evalsha(self.__sha_get_last, 0, self.__dbname, branch)
+        if struct and result:
+            result = struct.from_buffer_copy(result)
+        return result

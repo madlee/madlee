@@ -34,7 +34,7 @@ class ResponseJsonError(RuntimeError):
     def code(self):
         return self.__code
 
-
+@ensure_csrf_cookie
 def render_template(request, **argv):
     path = request.get_full_path()[1:]
     return render(request, path, argv)
