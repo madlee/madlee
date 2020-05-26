@@ -36,12 +36,24 @@ class AsyncClient:
         self.__dbname = dbname
 
 
+    async def prepare(self):
+        sha = await self.__redis.hmget(
+            GINKGO_SEPERATOR.join([self.__dbname, KEY_SCRIPTS]), 
+            SHA_PUSH, SHA_GET_LAST
+        )
+        self.__sha_push     = sha[0]
+        self.__sha_get_last = sha[1]
+
+
+
     async def push(self, key, *data):
-        return await self.__redis.evalsha(self.__sha_push, 0, self.__dbname, key, *data)
+        result = await self.__redis.evalsha(self.__sha_push, [], [self.__dbname, key] + data)
+        return result
 
 
     async def get_last(self, branch, struct=None):
-        result = await self.__redis.evalsha(self.__sha_get_last, 0, self.__dbname, branch)
+        # result = await self.__redis.evalsha(self.__sha_get_last, 0, self.__dbname, branch)
+        result = await self.__redis.evalsha(self.__sha_get_last, [], [self.__dbname, branch])
         if struct and result:
             result = struct.from_buffer_copy(result)
         return result

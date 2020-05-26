@@ -20,6 +20,7 @@ def create_logger(name):
         'handlers': {
             'console': {
                 'class': 'logging.StreamHandler',
+                'formatter': 'normal'
             },
             name:  {
                 'level': 'INFO',
@@ -32,12 +33,13 @@ def create_logger(name):
             }
         },
         'loggers': {
-            'django':  {
+            name: {
                 'handlers': ['console', name],
                 'level': 'INFO'
             }
         }
     }
+    print (result)
     dictConfig(result)
     return logging.getLogger(name)
 
