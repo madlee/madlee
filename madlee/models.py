@@ -4,7 +4,6 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django_redis import get_redis_connection
 
-
 from .fields import JSONField
 from .misc.io import load_pickle, dump_pickle
 from .misc.file import join_path, is_file, ensure_dirs

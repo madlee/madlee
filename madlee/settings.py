@@ -17,7 +17,7 @@ https://docs.djangoproject.com/en/2.2/ref/settings/
 SECRET_KEY = '0%u6h+7yg5&)=ild&e42tl)i5ir3_(8jqfvt6w7g%a^_q1pto9'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = []
 
