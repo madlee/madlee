@@ -6,6 +6,7 @@ from datetime import datetime as DateTime, timedelta as TimeDelta, time as Time
 from datetime import date as Date
 from bisect import bisect, bisect_left, bisect_right
 from time import sleep
+from random import uniform
 
 from .str import all_digits
 
@@ -127,6 +128,14 @@ class Timer(object):
         return self.delta.total_seconds()
 
 
+def next_tick(interval, noise=0):
+    assert interval > 0
+    result = DateTime.now()
+    if noise:
+        interval += interval*uniform(-noise, noise)
+
+    result += TimeDelta(seconds=interval)
+    return result 
 
 
 ###  Date Time related
