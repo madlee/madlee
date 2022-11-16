@@ -38,7 +38,7 @@ def to_date(date, default=None):
 
 
 def to_date_or_today(date):
-    return to_date(date, DateTime.today())
+    return to_date(date, Date.today())
 
 
 def to_date_or_none(date):
