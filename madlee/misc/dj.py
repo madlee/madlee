@@ -75,6 +75,8 @@ def json_response(func):
                 'message': 'Missing Parameter %s' % str(e),
                 'type': str(type(e)),
             }
+            if settings.DEBUG:
+                result['debug'] = format_exc()
         except Exception as e:
             code = 500
             result = {

@@ -176,8 +176,11 @@ class Client:
         }))
 
         if sync:
-            msg = await self.client.recv()
-            return load_json(msg), id
+            async for msg in self.client:
+                msg = load_json(msg)
+                if 'cmd' in msg and msg['cmd'] == 'close':
+                    break
+            return msg, id
         else:
             return id
 
