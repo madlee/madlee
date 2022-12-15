@@ -5,7 +5,7 @@ from asyncio.subprocess import create_subprocess_shell, PIPE
 from lzma import compress, decompress 
 from json import loads as load_json, dumps as dump_json
 from uuid import uuid4
-from hashlib import md5
+from hashlib import md5 as MD5
 import websockets
 
 from .misc.netware import hostname
@@ -56,16 +56,25 @@ async def ping(id):
 
 async def pull_file(self, cmd_id, filename, encode):
     print ('####', cmd_id, filename, encode)
-    content = open(filename, 'rb').read()
-    raw_length = len(content)
-    if encode == 'xz':
-        content = compress(content)
-    print ('####', raw_length, len(content))
-    await self.send(b'\0'+content)
+    md5 = MD5()
+    file = open(filename, 'rb')
+    length = raw_size = 0
+    while True:
+        content = file.read(BUFFER_SIZE)
+        if content:
+            md5.update(content)
+            raw_size += len(content)
+            if encode == 'xz':
+                content = compress(content)
+            length += len(content)
+            await self.send(b'\0'+content)
+        else:
+            break
     return {
         'id': cmd_id, 'encode': encode, 'filename': filename, 
-        'size': len(content), 'raw_length': raw_length
+        'raw_size': raw_size, 'length': length, 'md5': md5.hexdigest()
     }
+
 
 
 
@@ -88,7 +97,7 @@ async def wssh(websocket):
                     websocket.target = target = msg['target']
                     websocket.file = open(target, 'wb')
                     websocket.encode = msg['encode']
-                    websocket.md5 = md5()
+                    websocket.md5 = MD5()
                     result = {
                         'id': id, 'cmd': cmd,
                         'target': target
@@ -145,8 +154,8 @@ class Client:
         else:
             return id
 
-    async def send_file(self, target, file, xz=True, sync=True):
-        file = open(file, 'rb')
+    async def send_file(self, target, filename, xz=True, sync=True):
+        file = open(filename, 'rb')
         id = str(uuid4())
         if xz:
             encode = 'xz'
@@ -162,9 +171,11 @@ class Client:
 
         raw_size = length = 0
 
+        md5 = MD5()
         while True:
             content = file.read(BUFFER_SIZE)
             if content:
+                md5.update(content)
                 raw_size += len(content)
                 if xz:
                     content = compress(content)
@@ -177,7 +188,8 @@ class Client:
                 )
             else:
                 break
-
+        
+        md5 = md5.hexdigest()
         await self.client.send(dump_json({
             'id': id, 'cmd': 'close',
             'raw_size': raw_size, 'length': length
@@ -187,7 +199,10 @@ class Client:
             async for msg in self.client:
                 msg = load_json(msg)
                 if 'cmd' in msg and msg['cmd'] == 'close':
-                    break
+                    if md5 == msg['md5']:
+                        break
+                    else:
+                        raise RuntimeError('Transfer File %s --> %s failed.' % (filename, target))
             return msg, id
         else:
             return id
@@ -204,21 +219,22 @@ class Client:
         await self.client.send(dump_json(msg))
 
         if sync:
-            msg = await self.client.recv()
-            if type(msg) == bytes:
-                content = msg[1:]
-                if xz:
-                    content = decompress(content)
-                open(target, 'wb').write(content)
-                msg = await self.client.recv()
-            return load_json(msg), id
+            with open(target, 'wb') as output:
+                md5 = MD5()
+                async for msg in self.client:
+                    if type(msg) == bytes:
+                        content = msg[1:]
+                        if xz:
+                            content = decompress(content)
+                        md5.update(content)
+                        output.write(content)
+                    else:
+                        break
+                msg = load_json(msg)
+                print ('####', md5.hexdigest())
+                return msg, id
         else:
             return id
-
-
-
-        
-
 
 
 
