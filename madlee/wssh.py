@@ -9,6 +9,8 @@ import websockets
 
 from .misc.netware import hostname
 
+BUFFER_SIZE = 16*1024
+
 async def run_shell(id, cmd):
     proc = await create_subprocess_shell(
         cmd,
@@ -34,20 +36,10 @@ async def run_shell(id, cmd):
     }
 
 
-async def dump_file(msg):
-    cmd, content = msg.split(b'\0', 1)
-    cmd = load_json(cmd)
-    raw_length =len(content)
-    id = cmd['id']
-    encode = cmd['encode']
-    target = cmd['target']
+async def dump_file(file, content, encode):
     if encode == 'xz':
         content = decompress(content)
-    open(target, 'wb').write(content)
-    return {
-        'id': id, 'encode': encode, 'target': target, 
-        'size': len(content), 'raw_length': raw_length
-    }
+    file.write(content)
 
 async def ping(id):
     return {
@@ -77,7 +69,7 @@ async def wssh(websocket):
     async for msg in websocket:
         try:
             if type(msg) == bytes and msg[0] == 0:
-                result = await dump_file(msg[1:])
+                result = await dump_file(websocket.file, msg[1:], websocket.encode)
             else:
                 print (msg)
                 assert type(msg) == str
@@ -88,6 +80,23 @@ async def wssh(websocket):
                     result = await ping(id)
                 elif cmd == 'pull':
                     result = await pull_file(websocket, id, msg['filename'], msg['encode'])
+                elif cmd == 'open':
+                    target = msg['target']
+                    websocket.file = open(target, 'wb')
+                    websocket.encode = msg['encode']
+                    result = {
+                        'id': id, 'cmd': cmd,
+                        'target': target
+                    }
+                elif cmd == 'close':
+                    websocket.file.close()
+                    websocket.file = None
+                    websocket.encode = ''
+                    result = {
+                        'id': id, 'cmd': cmd,
+                        'target': websocket.target
+                    }
+                    websocket.target = ''
                 else:
                     result = await run_shell(id, cmd)
         except Exception as e:
@@ -129,26 +138,43 @@ class Client:
             return id
 
     async def send_file(self, target, file, xz=True, sync=True):
-        try:
-            content = file.read()
-        except AttributeError:
-            content = open(file, 'rb').read()
-            
+        file = open(file, 'rb')
+        id = str(uuid4())
         if xz:
-            content = compress(content)
             encode = 'xz'
         else:
             encode = 'raw'
 
-        id = str(uuid4())
-        msg = {
+        await self.client.send(dump_json({
             'id': id,
+            'cmd': 'open',
             'encode': encode,
             'target': target
-        }
-        await self.client.send(
-            b'\0'+ dump_json(msg).encode() +b'\0'+content
-        )
+        }))
+
+        raw_size = length = 0
+
+        while True:
+            content = file.read(BUFFER_SIZE)
+            if content:
+                raw_size += len(content)
+                if xz:
+                    content = compress(content)
+                    encode = 'xz'
+                else:
+                    encode = 'raw'
+                length += len(content)
+                await self.client.send(
+                    b'\0'+ content
+                )
+            else:
+                break
+
+        await self.client.send(dump_json({
+            'id': id, 'cmd': 'close',
+            'raw_size': raw_size, 'length': length
+        }))
+
         if sync:
             msg = await self.client.recv()
             return load_json(msg), id
