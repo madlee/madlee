@@ -5,6 +5,7 @@ from asyncio.subprocess import create_subprocess_shell, PIPE
 from lzma import compress, decompress 
 from json import loads as load_json, dumps as dump_json
 from uuid import uuid4
+from hashlib import md5
 import websockets
 
 from .misc.netware import hostname
@@ -36,10 +37,15 @@ async def run_shell(id, cmd):
     }
 
 
-async def dump_file(file, content, encode):
+async def dump_file(file, md5, content, encode):
+    n = len(content)
     if encode == 'xz':
         content = decompress(content)
     file.write(content)
+    md5.update(content)
+    return {
+        'length': n, 'raw_size': len(content)
+    }
 
 async def ping(id):
     return {
@@ -69,21 +75,20 @@ async def wssh(websocket):
     async for msg in websocket:
         try:
             if type(msg) == bytes and msg[0] == 0:
-                result = await dump_file(websocket.file, msg[1:], websocket.encode)
+                result = await dump_file(websocket.file, websocket.md5, msg[1:], websocket.encode)
             else:
-                print (msg)
                 assert type(msg) == str
                 msg = load_json(msg)
                 id, cmd = msg['id'], msg['cmd']
-                print (id, cmd)
                 if cmd == 'ping':
                     result = await ping(id)
                 elif cmd == 'pull':
                     result = await pull_file(websocket, id, msg['filename'], msg['encode'])
                 elif cmd == 'open':
-                    target = msg['target']
+                    websocket.target = target = msg['target']
                     websocket.file = open(target, 'wb')
                     websocket.encode = msg['encode']
+                    websocket.md5 = md5()
                     result = {
                         'id': id, 'cmd': cmd,
                         'target': target
@@ -94,15 +99,18 @@ async def wssh(websocket):
                     websocket.encode = ''
                     result = {
                         'id': id, 'cmd': cmd,
-                        'target': websocket.target
+                        'target': websocket.target,
+                        'md5': websocket.md5.hexdigest()
                     }
                     websocket.target = ''
+                    websocket.md5 = None
                 else:
                     result = await run_shell(id, cmd)
         except Exception as e:
             result = {'ERROR': str(e)}
         result['server_time'] = DateTime.now().isoformat()
         result['host_name'] = HOST_NAME
+        print (result)
         await websocket.send(dump_json(result))
         
 
