@@ -11,6 +11,8 @@ import websockets
 from .misc.netware import hostname
 
 BUFFER_SIZE = 16*1024
+SECRET_KEY = {}
+TIMESTAMP_TOLERANCE = 10
 
 async def run_shell(id, cmd):
     proc = await create_subprocess_shell(
@@ -76,11 +78,61 @@ async def pull_file(self, cmd_id, filename, encode):
     }
 
 
+async def login(websocket):
+    async for msg in websocket:
+        msg = load_json(msg)
+        if msg['cmd'] != 'login':
+            await websocket.send(dump_json({
+                'status': 'NOT LOGIN',
+                'message': 'Please Login First.'
+            }))
+            continue
+       
+        timestamp = DateTime.fromisoformat(msg['timestamp'])
+        if abs((timestamp - DateTime.now()).total_seconds()) > TIMESTAMP_TOLERANCE:
+            await websocket.send(dump_json({
+                'status': 'EXPIRED',
+                'message': 'TIMESTAMP EXPIRED'
+            }))
+            break
+            
+        username = msg['username']
+        try:
+            secret_key = SECRET_KEY[username]
+        except KeyError:
+            await websocket.send(dump_json({
+                'status': 'INVALID USER',
+                'message': 'INVALID USER'
+            }))
+            break
 
+        signature = ':'.join([msg['id'], msg['cmd'], username, msg['timestamp'], secret_key])
+        signature = 'MD5:' + MD5(signature.encode()).hexdigest()
+        if signature != msg['signature']:
+            await websocket.send(dump_json({
+                'status': 'INVALID SIGNATURE',
+                'message': 'INVALID SIGNATURE'
+            }))
+            break
+
+        await websocket.send(dump_json({
+            'id': msg['id'], 'cmd': 'Login',
+            'username': username,
+            'status': 'OK',
+            'message': 'Login Success'
+        }))
+        return True
+
+    await websocket.close()
+    return False
 
 
 async def wssh(websocket):
     # Web Socket Shell
+    success = await login(websocket)
+    if not success:
+        return
+
     async for msg in websocket:
         try:
             if type(msg) == bytes and msg[0] == 0:
@@ -133,8 +185,21 @@ class Client:
         self.url = url
         self.client = None
 
-    async def connect(self):
+    async def connect(self, username, secret_key):
         self.client = await websockets.connect(self.url)
+        if username:
+            msg = {
+                'id': str(uuid4()), 'cmd': 'login',
+                'username': username,
+                'timestamp': DateTime.now().isoformat()
+            }
+
+            signature = ':'.join([msg['id'], msg['cmd'], username, msg['timestamp'], secret_key])
+            msg['signature'] = 'MD5:' + MD5(signature.encode()).hexdigest()
+            await self.client.send(dump_json(msg))
+            response = load_json(await self.client.recv())
+            if response['status'] != 'OK':
+                raise RuntimeError(response.get('message', 'Login Failed'))
         return self.client
 
 
@@ -241,6 +306,9 @@ class Client:
 
 if __name__ == '__main__':
     import sys
-    host, port = sys.argv[1:]
+    host, port, config = sys.argv[1:]
+    config = load_json(open(config).read())
+    TIMESTAMP_TOLERANCE = int(config.get('tolerance', TIMESTAMP_TOLERANCE))
+    SECRET_KEY = config['USERS']
     HOST_NAME = hostname()
     aio.run(server(host, int(port)))
