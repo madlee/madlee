@@ -302,6 +302,29 @@ class Client:
             return id
 
 
+    @staticmethod
+    async def batch(url, username, secret, cmds):
+        client = Client(url)
+        await client.connect(username, secret)
+        i = 0
+        while i < len(cmds):
+            if cmds[i] == 'pull':
+                src = cmds[i+1]
+                tgt = cmds[i+2]
+                result = await client.pull_file(src, tgt)
+                i += 3
+            elif cmds[i] == 'send':
+                src = cmds[i+1]
+                tgt = cmds[i+2]
+                result = await client.send_file(tgt, src)
+                i += 3
+            else:
+                result = await client.run_shell(cmds[i])
+                i += 1
+            print (result)
+
+
+
 
 
 if __name__ == '__main__':
