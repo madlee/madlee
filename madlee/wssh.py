@@ -323,6 +323,8 @@ class Client:
                 i += 1
             print (result)
 
+        await client.close()
+
 
 
 
