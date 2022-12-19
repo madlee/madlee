@@ -311,12 +311,12 @@ class Client:
             if cmds[i] == 'pull':
                 src = cmds[i+1]
                 tgt = cmds[i+2]
-                result = await client.pull_file(src, tgt)
+                result = await client.pull_file(src, tgt, False)
                 i += 3
             elif cmds[i] == 'send':
                 src = cmds[i+1]
                 tgt = cmds[i+2]
-                result = await client.send_file(tgt, src)
+                result = await client.send_file(tgt, src, False)
                 i += 3
             else:
                 result = await client.run_shell(cmds[i])
