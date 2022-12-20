@@ -409,7 +409,7 @@ class AsyncClient:
 
     @staticmethod
     async def batch(url, username, secret, cmds):
-        client = Client(url)
+        client = AsyncClient(url)
         await client.connect(username, secret)
         i = 0
         while i < len(cmds):
