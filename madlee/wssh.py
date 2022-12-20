@@ -1,11 +1,13 @@
 #!/bin/bash 
 import asyncio as aio
 from datetime import datetime as DateTime
+from redis import StrictRedis as Redis
 from asyncio.subprocess import create_subprocess_shell, PIPE
 from lzma import compress, decompress 
 from json import loads as load_json, dumps as dump_json
 from uuid import uuid4
 from hashlib import md5 as MD5
+from base64 import b64encode, b64decode
 import websockets
 
 from .misc.netware import hostname
@@ -37,6 +39,51 @@ async def run_shell(id, cmd):
         'stdout': stdout,
         'stderr': stderr
     }
+
+async def redis_commond(websocket, id, cmd, call, **args):
+    result = {
+        'id': id,
+        'cmd': cmd,
+        'call': call,
+    }
+    if call == 'open':
+        url = args['url']
+        websocket.redis = Redis.from_url(args['url'])
+        result['url'] = url
+    elif call == 'close':
+        del websocket.redis
+        websocket.redis = None
+        result['redis'] = 'Closed'
+    elif call == 'rpush':
+        key = args['key']
+        data = args['data']
+        if type(data) == str:
+            data = [data]
+        encode = args['encode']
+        if encode == 'raw':
+            pass
+        elif encode == 'base64':
+            data = [
+                b64decode(row)
+                for row in data
+            ]
+        else:
+            assert False
+        result['result'] = websocket.redis.rpush(key, *data)
+    elif call == 'publish':
+        key = args['key']
+        data = args['data']
+        encode = args['encode']
+        if encode == 'raw':
+            pass
+        elif encode == 'base64':
+            data = b64decode(data)
+        else:
+            assert False
+        result['result'] = websocket.redis.publish(key, data)
+
+    return result
+
 
 
 async def dump_file(file, md5, content, encode):
@@ -165,6 +212,8 @@ async def wssh(websocket):
                     }
                     websocket.target = ''
                     websocket.md5 = None
+                elif cmd == 'redis':
+                    result = await redis_commond(websocket, **msg)
                 else:
                     result = await run_shell(id, cmd)
         except Exception as e:
@@ -271,6 +320,62 @@ class Client:
             return msg, id
         else:
             return id
+
+    async def redis(self, url):
+        id = str(uuid4())
+        msg = {
+            'id': id, 'cmd': 'redis',
+            'call': 'open',
+            'url': url
+        }
+        await self.client.send(dump_json(msg))
+        msg = await self.client.recv()
+        self.has_redis = True
+        return load_json(msg), id
+
+    async def rpush(self, key, *data):
+        assert self.has_redis
+        assert len(data)>0
+        if type(data[0]) == bytes:
+            data = [
+                b64encode(row).decode()
+                for row in data
+            ]
+            encode='base64'
+        else:
+            encode='raw'
+
+        id = str(uuid4())
+        msg = {
+            'id': id, 'cmd': 'redis',
+            'call': 'rpush', 'key': key,
+            'encode': encode,
+            'data': data
+        }
+        await self.client.send(dump_json(msg))
+        msg = await self.client.recv()
+        return load_json(msg), id
+
+
+    async def publish(self, key, data):
+        assert self.has_redis
+        if type(data) == bytes:
+            data = b64encode(data)
+            encode='base64'
+        else:
+            encode='raw'
+        
+        id = str(uuid4())
+        msg = {
+            'id': id, 'cmd': 'redis',
+            'call': 'publish', 'key': key,
+            'encode': encode,
+            'data': data
+        }
+        await self.client.send(dump_json(msg))
+        msg = await self.client.recv()
+        return load_json(msg), id
+
 
 
     async def pull_file(self, filename, target, xz=True, sync=True):
